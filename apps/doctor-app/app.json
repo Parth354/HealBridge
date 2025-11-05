@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Veersa Doctor",
+    "slug": "veersa-doctor",
+    "scheme": "veersa-doc",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icons/app.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/icons/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icons/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.veersa.doctor"
+    },
+    "plugins": [
+      [
+        "expo-notifications"
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
+          }
+        }
+      ],
+      "expo-asset"
+    ],
+    "extra": {
+      "EXPO_PUBLIC_API_BASE_URL": "http://192.168.1.16:8080/api"
+    }
+  }
+}
