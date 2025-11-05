@@ -1,5 +1,5 @@
-const AWS = require('aws-sdk');
-const config = require('./env');
+import AWS from 'aws-sdk';
+import config from './env.js';
 
 const s3 = new AWS.S3({
   accessKeyId: config.AWS_ACCESS_KEY,
@@ -7,7 +7,7 @@ const s3 = new AWS.S3({
   region: config.AWS_REGION,
 });
 
-const uploadToS3 = async (file, key) => {
+export const uploadToS3 = async (file, key) => {
   const params = {
     Bucket: config.S3_BUCKET,
     Key: key,
@@ -18,4 +18,4 @@ const uploadToS3 = async (file, key) => {
   return result.Location;
 };
 
-module.exports = { s3, uploadToS3 };
+export { s3 };
