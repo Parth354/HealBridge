@@ -1,4 +1,3 @@
-// src/screens/home/TriageScreen.tsx
 import React, { useState } from 'react'
 import { View } from 'react-native'
 import { Input, Button } from '../../components'
