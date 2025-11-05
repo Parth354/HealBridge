@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Heal Bridge",
+    "slug": "patient-app",
+    "scheme": "veersa",
+    "sdkVersion": "54.0.0",
+    "plugins": [
+      "expo-notifications",
+      "expo-location"
+    ],
+    "extra": {
+      "EXPO_PUBLIC_API_BASE_URL": "http://192.168.1.10:8080/api"
+    }
+  }
+}

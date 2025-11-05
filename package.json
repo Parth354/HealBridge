@@ -1,0 +1,13 @@
+{
+  "name": "healbridge",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:packages": "npm --workspaces --if-present run build",
+    "dev:patient": "npm --prefix apps/patient-app run start",
+    "dev:doctor": "npm --prefix apps/doctor-app run start"
+  }
+}
