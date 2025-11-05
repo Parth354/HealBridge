@@ -1,0 +1,20 @@
+{
+  "name": "healbridgebackend",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/Parth354/HealBridge#readme",
+  "bugs": {
+    "url": "https://github.com/Parth354/HealBridge/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Parth354/HealBridge.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
