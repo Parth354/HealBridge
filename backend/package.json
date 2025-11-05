@@ -1,7 +1,7 @@
 {
   "name": "healbridgebackend",
   "version": "1.0.0",
-  "description": "",
+  "description": "HealBridge Healthcare Platform Backend",
   "homepage": "https://github.com/Parth354/HealBridge#readme",
   "bugs": {
     "url": "https://github.com/Parth354/HealBridge/issues"
@@ -13,8 +13,48 @@
   "license": "ISC",
   "author": "",
   "type": "module",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "prisma:generate": "prisma generate --schema=./src/prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema=./src/prisma/schema.prisma",
+    "prisma:push": "prisma db push --schema=./src/prisma/schema.prisma",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "aws-sdk": "^2.1498.0",
+    "axios": "^1.6.2",
+    "bcrypt": "^5.1.1",
+    "bull": "^4.11.5",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.3.2",
+    "joi": "^17.11.0",
+    "jsonwebtoken": "^9.0.2",
+    "langchain": "^0.0.208",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "multer-s3": "^3.0.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.7",
+    "openai": "^4.20.1",
+    "pdf-parse": "^1.1.1",
+    "redis": "^4.6.11",
+    "tesseract.js": "^5.0.3",
+    "twilio": "^5.10.4",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "prisma": "^5.7.0"
+  },
+  "prisma": {
+    "schema": "./src/prisma/schema.prisma"
   }
 }
