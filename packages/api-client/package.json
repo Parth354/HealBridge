@@ -1,0 +1,10 @@
+﻿{
+  "name": "api-client",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "dependencies": { "@tanstack/react-query": "^5.56.2", "axios": "^1.7.7" },
+  "scripts": { "build": "tsc -p tsconfig.build.json" }
+}

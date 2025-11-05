@@ -1,0 +1,11 @@
+﻿{
+  "name": "ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "peerDependencies": { "react": "*", "react-native": "*" },
+  "scripts": { "build": "tsc -p tsconfig.build.json" }
+}
