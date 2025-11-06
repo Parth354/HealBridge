@@ -293,58 +293,138 @@ class OCRService {
     return value * (multipliers[unit] || 1);
   }
 
-  // ⚠️ PATCH FIX: Returns placeholder URL
-  // 🔧 ROOT FIX REQUIRED: Implement actual S3 upload
+  // ✅ ROOT FIX: Actual S3 upload implementation with security features
   async uploadToS3(file, patientId) {
-    // TODO: Replace with actual AWS S3 upload
-    //
-    // ROOT FIX Implementation:
-    // -----------------------------------------
-    // const fs = require('fs');
-    // const s3 = require('../config/s3');
-    // 
-    // const key = `prescriptions/${patientId}/${Date.now()}_${file.originalname}`;
-    // const fileContent = await fs.promises.readFile(file.path);
-    // 
-    // const params = {
-    //   Bucket: process.env.S3_BUCKET,
-    //   Key: key,
-    //   Body: fileContent,
-    //   ContentType: file.mimetype,
-    //   ACL: 'private', // ⚠️ IMPORTANT: Keep private for PHI data
-    //   ServerSideEncryption: 'AES256', // ⚠️ IMPORTANT: Encrypt PHI at rest
-    //   Metadata: {
-    //     patientId: patientId,
-    //     uploadedAt: new Date().toISOString()
-    //   }
-    // };
-    // 
-    // try {
-    //   const uploadResult = await s3.s3.upload(params).promise();
-    //   
-    //   // Clean up temp file
-    //   await fs.promises.unlink(file.path);
-    //   
-    //   return uploadResult.Location;
-    // } catch (error) {
-    //   console.error('S3 upload failed:', error);
-    //   throw new Error('File upload failed');
-    // }
-    //
-    // ⚠️ SECURITY NOTES:
-    // 1. Never use public ACL for patient documents
-    // 2. Always encrypt at rest (ServerSideEncryption)
-    // 3. Use signed URLs for access (valid for 1 hour):
-    //    const signedUrl = s3.s3.getSignedUrl('getObject', {
-    //      Bucket: process.env.S3_BUCKET,
-    //      Key: key,
-    //      Expires: 3600 // 1 hour
-    //    });
-    // 4. Enable S3 bucket versioning for audit trail
-    // 5. Set lifecycle policies to archive old documents
-    
-    const key = `prescriptions/${patientId}/${Date.now()}_${file.originalname}`;
-    return `https://healbridge-bucket.s3.amazonaws.com/${key}`;
+    // Check if S3 is configured
+    if (!process.env.S3_BUCKET || !process.env.AWS_ACCESS_KEY || !process.env.AWS_SECRET_KEY) {
+      console.warn('⚠️  S3 not configured, using local file path');
+      // Return local path as fallback for development
+      return `file://temp/${file.filename}`;
+    }
+
+    try {
+      // Generate unique key for S3
+      const timestamp = Date.now();
+      const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const key = `prescriptions/${patientId}/${timestamp}_${sanitizedFilename}`;
+
+      // Read file content from temporary storage
+      const fileContent = await fs.readFile(file.path);
+
+      // Prepare S3 upload parameters with HIPAA/PHI compliance
+      const params = {
+        Bucket: process.env.S3_BUCKET,
+        Key: key,
+        Body: fileContent,
+        ContentType: file.mimetype,
+        ACL: 'private', // ⚠️ CRITICAL: Keep private for PHI/HIPAA compliance
+        ServerSideEncryption: 'AES256', // ⚠️ CRITICAL: Encrypt at rest for security
+        Metadata: {
+          patientId: patientId,
+          uploadedAt: new Date().toISOString(),
+          originalName: file.originalname,
+          uploadedBy: 'ocr-service'
+        },
+        // Optional: Add tagging for lifecycle management and compliance
+        Tagging: `Environment=production&DataType=PHI&PatientId=${patientId}`
+      };
+
+      console.log(`📤 Uploading file to S3: ${key}`);
+
+      // Upload to S3 using AWS SDK
+      const uploadResult = await s3Client.s3.upload(params).promise();
+      
+      console.log(`✅ File uploaded successfully to S3: ${key}`);
+      console.log(`   URL: ${uploadResult.Location}`);
+      console.log(`   ETag: ${uploadResult.ETag}`);
+
+      // Clean up temporary file after successful upload
+      try {
+        await fs.unlink(file.path);
+        console.log(`🗑️  Cleaned up temp file: ${file.path}`);
+      } catch (unlinkError) {
+        console.warn('⚠️  Failed to clean up temp file:', unlinkError.message);
+        // Don't throw - upload was successful, cleanup is secondary
+      }
+
+      // Return the S3 URL
+      return uploadResult.Location;
+
+    } catch (error) {
+      console.error('❌ S3 upload failed:', error);
+      
+      // Keep temp file on error for retry/debugging
+      console.warn('⚠️  Temp file preserved at:', file.path);
+      
+      throw new Error(`File upload failed: ${error.message}`);
+    }
+  }
+
+  // Generate signed URL for secure access to uploaded documents
+  async generateSignedUrl(fileUrl, expiresIn = 3600) {
+    // Check if S3 is configured
+    if (!process.env.S3_BUCKET || !fileUrl.includes('s3.amazonaws.com')) {
+      console.warn('⚠️  S3 not configured or URL is not an S3 URL');
+      return fileUrl; // Return original URL for fallback
+    }
+
+    try {
+      // Extract key from S3 URL
+      const urlParts = fileUrl.split('.s3.amazonaws.com/');
+      if (urlParts.length < 2) {
+        throw new Error('Invalid S3 URL format');
+      }
+      
+      const key = urlParts[1];
+
+      // Generate signed URL
+      const signedUrl = s3Client.s3.getSignedUrl('getObject', {
+        Bucket: process.env.S3_BUCKET,
+        Key: key,
+        Expires: expiresIn // Default: 1 hour
+      });
+
+      console.log(`🔐 Generated signed URL for: ${key} (expires in ${expiresIn}s)`);
+      
+      return signedUrl;
+
+    } catch (error) {
+      console.error('❌ Failed to generate signed URL:', error);
+      return fileUrl; // Fallback to original URL
+    }
+  }
+
+  // Delete file from S3 (for GDPR compliance / data deletion)
+  async deleteFromS3(fileUrl) {
+    // Check if S3 is configured
+    if (!process.env.S3_BUCKET || !fileUrl.includes('s3.amazonaws.com')) {
+      console.warn('⚠️  S3 not configured or URL is not an S3 URL');
+      return { success: false, reason: 'Not an S3 file' };
+    }
+
+    try {
+      // Extract key from S3 URL
+      const urlParts = fileUrl.split('.s3.amazonaws.com/');
+      if (urlParts.length < 2) {
+        throw new Error('Invalid S3 URL format');
+      }
+      
+      const key = urlParts[1];
+
+      // Delete from S3
+      await s3Client.s3.deleteObject({
+        Bucket: process.env.S3_BUCKET,
+        Key: key
+      }).promise();
+
+      console.log(`🗑️  Deleted file from S3: ${key}`);
+      
+      return { success: true, key };
+
+    } catch (error) {
+      console.error('❌ Failed to delete from S3:', error);
+      return { success: false, error: error.message };
+    }
   }
 
   // Confirm OCR extracted medications

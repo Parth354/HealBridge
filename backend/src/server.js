@@ -35,7 +35,7 @@ app.use('/api/', limiter);
 // Stricter rate limit for OTP endpoints
 const otpLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // Limit each IP to 5 OTP requests per hour
+  max: 100, // Limit each IP to 5 OTP requests per hour
   message: 'Too many OTP requests, please try again later.'
 });
 

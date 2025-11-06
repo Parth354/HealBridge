@@ -5,7 +5,7 @@ class AuthController {
   async sendOTP(req, res) {
     try {
       let { phone } = req.body;
-      phone = phone;
+      
 
       if (!phone) {
         return res.status(400).json({ error: 'Phone number is required' });

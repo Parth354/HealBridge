@@ -1,6 +1,7 @@
 import prisma from '../config/prisma.js';
 import redisClient from '../config/redis.js';
 import { v4 as uuidv4 } from 'uuid';
+import notificationService from './notification.service.js';
 
 class BookingService {
   constructor() {
@@ -357,9 +358,43 @@ class BookingService {
 
   // Trigger booking notifications (async)
   async triggerBookingNotifications(appointment) {
-    // This will be handled by notification service
-    // Queue notification jobs
-    console.log('Triggering notifications for appointment:', appointment.id);
+    try {
+      // 1. Send instant booking confirmation (EMAIL, SMS, PUSH)
+      await notificationService.queueNotification('booking_instant', { appointment });
+      console.log(`✅ Queued instant booking notification for appointment ${appointment.id}`);
+
+      // 2. Schedule 24-hour reminder
+      const appointmentTime = new Date(appointment.startTs);
+      const now = new Date();
+      const timeTo24HoursBefore = appointmentTime.getTime() - now.getTime() - (24 * 60 * 60 * 1000);
+
+      if (timeTo24HoursBefore > 0) {
+        await notificationService.queueNotification(
+          'reminder_24h',
+          { appointmentId: appointment.id },
+          timeTo24HoursBefore
+        );
+        console.log(`✅ Scheduled 24-hour reminder for appointment ${appointment.id}`);
+      }
+
+      // 3. Schedule 1-hour reminder
+      const timeTo1HourBefore = appointmentTime.getTime() - now.getTime() - (60 * 60 * 1000);
+
+      if (timeTo1HourBefore > 0) {
+        await notificationService.queueNotification(
+          'reminder_1h',
+          { appointmentId: appointment.id },
+          timeTo1HourBefore
+        );
+        console.log(`✅ Scheduled 1-hour reminder for appointment ${appointment.id}`);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Failed to queue booking notifications:', error);
+      // Don't throw - booking is already confirmed, notifications are secondary
+      return { success: false, error: error.message };
+    }
   }
 
   // Update doctor average consult time
