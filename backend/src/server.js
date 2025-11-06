@@ -118,8 +118,8 @@ app.listen(PORT, () => {
 ╔═══════════════════════════════════════╗
 ║       HealBridge Backend Server       ║
 ╠═══════════════════════════════════════╣
-║  Environment: ${config.NODE_ENV.padEnd(23)}║
-║  Port:        ${PORT.toString().padEnd(23)}║
+║  Environment: ${config.NODE_ENV.padEnd(23)} ║
+║  Port:        ${PORT.toString().padEnd(23)} ║
 ║  Status:      Running ✓               ║
 ╚═══════════════════════════════════════╝
   `);

@@ -41,13 +41,13 @@ class PatientController {
     try {
       const filters = {
         specialty: req.query.specialty,
-        lat: parseFloat(req.query.lat),
-        lon: parseFloat(req.query.lon),
-        visitType: req.query.visitType,
-        sortBy: req.query.sortBy || 'distance',
-        maxDistance: parseInt(req.query.maxDistance) || 50,
-        minRating: parseFloat(req.query.minRating) || 0,
-        limit: parseInt(req.query.limit) || 20
+        lat: parseFloat(req.query?.lat),
+        lon: parseFloat(req.query?.lon),
+        visitType: req.query?.visitType,
+        sortBy: req.query?.sortBy || 'distance',
+        maxDistance: parseInt(req.query?.maxDistance) || 50,
+        minRating: parseFloat(req.query?.minRating) || 0,
+        limit: parseInt(req.query?.limit) || 20
       };
 
       const doctors = await doctorService.searchDoctors(filters);

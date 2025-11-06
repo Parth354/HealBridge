@@ -1,50 +1,92 @@
 import redis from 'redis';
 import config from './env.js';
 
-// 🔧 ROOT FIX: Production-ready Redis configuration
+// ✅ Cloud-Ready Redis Configuration
+// Supports both local Redis and Upstash (cloud Redis)
 // 
-// Redis is running on WSL. This configuration handles connection properly.
-// If you see connection errors, make sure:
-// 1. Redis is running in WSL: wsl -d Ubuntu redis-server
-// 2. Port 6379 is accessible from Windows
-// 3. WSL networking is properly configured
+// For Upstash:
+// - URL format: rediss://default:password@host:port
+// - Uses TLS by default (rediss://)
+// - No local Redis installation needed
+//
+// For Local Redis:
+// - URL format: redis://localhost:6379
+// - Requires local Redis server running
 
-const client = redis.createClient({ 
+const isUpstash = config.REDIS_URL?.includes('upstash.io') || config.REDIS_URL?.startsWith('rediss://');
+
+const clientOptions = {
   url: config.REDIS_URL,
   socket: {
-    connectTimeout: 10000, // 10 second timeout for WSL
+    connectTimeout: isUpstash ? 30000 : 10000, // 30s for cloud, 10s for local
     reconnectStrategy: (retries) => {
-      // Reconnect after 1 second, max 10 retries
-      if (retries > 10) {
-        console.error('❌ Redis: Max reconnection attempts reached');
+      // More aggressive reconnection for cloud services
+      const maxRetries = isUpstash ? 20 : 10;
+      const retryDelay = isUpstash ? 2000 : 1000;
+      
+      if (retries > maxRetries) {
+        console.error(`❌ Redis: Max reconnection attempts reached (${maxRetries})`);
         return new Error('Max reconnection attempts reached');
       }
-      console.log(`🔄 Redis: Reconnecting... (attempt ${retries})`);
-      return 1000; // Retry after 1 second
+      
+      console.log(`🔄 Redis: Reconnecting... (attempt ${retries}/${maxRetries})`);
+      return retryDelay;
     }
   }
-});
+};
+
+// Add TLS configuration for Upstash
+if (isUpstash) {
+  clientOptions.socket.tls = true;
+  clientOptions.socket.rejectUnauthorized = false; // For self-signed certificates
+  console.log('🌐 Upstash Redis detected - using TLS connection');
+}
+
+const client = redis.createClient(clientOptions);
 
 // Event handlers
 client.on('error', (err) => {
   console.error('❌ Redis error:', err.message);
-  if (err.message.includes('ECONNREFUSED')) {
-    console.error('');
-    console.error('💡 Redis connection refused. Make sure Redis is running in WSL:');
-    console.error('   1. Open WSL: wsl -d Ubuntu');
-    console.error('   2. Start Redis: sudo service redis-server start');
-    console.error('   3. Check status: sudo service redis-server status');
-    console.error('   4. Test connection: redis-cli ping');
-    console.error('');
+  
+  if (isUpstash) {
+    if (err.message.includes('ECONNREFUSED') || err.message.includes('ETIMEDOUT')) {
+      console.error('');
+      console.error('💡 Upstash Redis connection failed. Please check:');
+      console.error('   1. REDIS_URL is correct in .env');
+      console.error('   2. Upstash database is active (check dashboard)');
+      console.error('   3. Network/firewall allows connections');
+      console.error('   4. URL format: rediss://default:password@host:port');
+      console.error('');
+    }
+  } else {
+    if (err.message.includes('ECONNREFUSED')) {
+      console.error('');
+      console.error('💡 Local Redis connection refused. Options:');
+      console.error('   Option 1 - Use Upstash (Recommended):');
+      console.error('      1. Sign up at https://upstash.com');
+      console.error('      2. Create Redis database');
+      console.error('      3. Copy Redis URL to .env');
+      console.error('');
+      console.error('   Option 2 - Start Local Redis:');
+      console.error('      1. Install Redis: https://redis.io/download');
+      console.error('      2. Start: redis-server');
+      console.error('      3. Test: redis-cli ping');
+      console.error('');
+    }
   }
 });
 
 client.on('connect', () => {
-  console.log('🔄 Redis: Connecting...');
+  const connectionType = isUpstash ? 'Upstash Cloud' : 'Local';
+  console.log(`🔄 Redis: Connecting to ${connectionType}...`);
 });
 
 client.on('ready', () => {
-  console.log('✅ Redis: Connected and ready!');
+  const connectionType = isUpstash ? 'Upstash Cloud' : 'Local';
+  console.log(`✅ Redis: Connected to ${connectionType} and ready!`);
+  if (isUpstash) {
+    console.log('   Using cloud Redis - no local installation needed ☁️');
+  }
 });
 
 client.on('reconnecting', () => {
@@ -60,6 +102,12 @@ client.connect().catch((err) => {
   console.error('❌ Failed to connect to Redis:', err.message);
   console.error('⚠️  Server will start but Redis-dependent features will not work.');
   console.error('   Features affected: OTP login, slot holds, queues, caching');
+  console.error('');
+  if (isUpstash) {
+    console.error('💡 Upstash setup: https://upstash.com → Create Database → Copy URL');
+  } else {
+    console.error('💡 Consider using Upstash for cloud Redis: https://upstash.com');
+  }
 });
 
 export default client;
