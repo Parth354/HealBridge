@@ -18,7 +18,7 @@ import PermissionsScreen from '../../screens/account/PermissionsScreen'
 const S = createNativeStackNavigator<RootStackParamList>()
 export default function MainNavigator() {
   return (
-    <S.Navigator screenOptions={{headerShown:false}}>
+    <S.Navigator>
       <S.Screen name="Home" component={HomeScreen}/>
       <S.Screen name="Triage" component={TriageScreen}/>
       <S.Screen name="SearchDoctors" component={SearchDoctorsScreen}/>
