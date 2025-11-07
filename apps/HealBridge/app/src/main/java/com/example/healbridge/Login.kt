@@ -7,6 +7,7 @@ import android.view.View
 import android.widget.ProgressBar
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.example.healbridge.databinding.ActivityLoginBinding
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
@@ -17,6 +18,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
 
 class Login : AppCompatActivity() {
 
@@ -24,6 +26,7 @@ class Login : AppCompatActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var googleSignInClient: GoogleSignInClient
     private lateinit var firestore: FirebaseFirestore
+    private lateinit var apiService: ApiService
 
     // Modern Activity Result API
     private val googleSignInLauncher = registerForActivityResult(
@@ -56,6 +59,7 @@ class Login : AppCompatActivity() {
 
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
+        apiService = ApiService(this)
 
         // Configure Google Sign-In
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -88,9 +92,6 @@ class Login : AppCompatActivity() {
         val credential = GoogleAuthProvider.getCredential(account.idToken, null)
         auth.signInWithCredential(credential)
             .addOnCompleteListener(this) { task ->
-                binding.loadingIndicator.visibility = View.GONE
-                binding.googleSignInButton.isEnabled = true
-
                 if (task.isSuccessful) {
                     val user = auth.currentUser
                     user?.let {
@@ -98,10 +99,11 @@ class Login : AppCompatActivity() {
                         SecurePreferences.saveUserId(this, it.uid)
                         Log.d("Login", "User authenticated: ${it.uid}")
 
-                        // Check if user details exist in Firestore
-                        checkUserDetailsInFirestore(it.uid)
+                        // Authenticate with backend
+                        authenticateWithBackend()
                     }
                 } else {
+                    binding.loadingIndicator.visibility = View.GONE
                     Log.e("Login", "Authentication failed", task.exception)
                     Snackbar.make(
                         binding.root,
@@ -110,6 +112,53 @@ class Login : AppCompatActivity() {
                     ).show()
                 }
             }
+    }
+
+    private fun authenticateWithBackend() {
+        lifecycleScope.launch {
+            try {
+                Log.d("Login", "Authenticating with backend...")
+                
+                val result = apiService.authenticateWithFirebase("PATIENT")
+                
+                result.onSuccess { response ->
+                    Log.d("Login", "✅ Backend authentication successful")
+                    Log.d("Login", "User ID: ${response.user.id}")
+                    Log.d("Login", "Has Profile: ${response.user.hasProfile}")
+                    
+                    binding.loadingIndicator.visibility = View.GONE
+                    
+                    // Check if user has completed profile
+                    if (response.user.hasProfile) {
+                        // Also check Firestore for backward compatibility
+                        checkUserDetailsInFirestore(auth.currentUser?.uid ?: "")
+                    } else {
+                        // User needs to complete profile
+                        navigateToUserDetails()
+                    }
+                }.onFailure { error ->
+                    binding.loadingIndicator.visibility = View.GONE
+                    Log.e("Login", "❌ Backend authentication failed", error)
+                    
+                    // Fallback to Firestore check if backend fails
+                    Snackbar.make(
+                        binding.root,
+                        "Backend authentication failed. Using offline mode.",
+                        Snackbar.LENGTH_LONG
+                    ).show()
+                    
+                    checkUserDetailsInFirestore(auth.currentUser?.uid ?: "")
+                }
+            } catch (e: Exception) {
+                binding.loadingIndicator.visibility = View.GONE
+                Log.e("Login", "Backend authentication error", e)
+                Snackbar.make(
+                    binding.root,
+                    "Error: ${e.message}",
+                    Snackbar.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun checkUserDetailsInFirestore(uid: String) {

@@ -1,11 +1,25 @@
 import prisma from '../config/prisma.js';
 import mailTransporter from '../config/mail.js';
 import Queue from 'bull';
+import fcmService from './fcm.service.js';
+import websocketService from './websocket.service.js';
+import twilio from 'twilio';
+import config from '../config/env.js';
 
 class NotificationService {
   constructor() {
     // Create notification queue
     this.notificationQueue = new Queue('notifications', process.env.REDIS_URL || 'redis://localhost:6379');
+    
+    // Initialize Twilio for SMS
+    this.twilioClient = null;
+    if (config.TWILIO_ACCOUNT_SID && config.TWILIO_AUTH_TOKEN) {
+      this.twilioClient = twilio(config.TWILIO_ACCOUNT_SID, config.TWILIO_AUTH_TOKEN);
+      console.log('✅ Twilio SMS client initialized');
+    } else {
+      console.warn('⚠️  Twilio credentials not configured - SMS disabled');
+    }
+    
     this.setupQueueProcessor();
   }
 
@@ -43,6 +57,7 @@ class NotificationService {
     // Create notification records
     const channels = ['EMAIL', 'PUSH', 'SMS'];
     const notifications = [];
+    const results = { email: null, push: null, sms: null };
 
     for (const channel of channels) {
       const notification = await prisma.notification.create({
@@ -65,21 +80,94 @@ class NotificationService {
 
     // Send email
     if (appointment.patient.user.email) {
+      try {
       await this.sendEmail({
         to: appointment.patient.user.email,
         subject: 'Appointment Confirmed - HealBridge',
         html: this.getBookingConfirmationTemplate(appointment)
       });
-    }
 
     // Mark email notification as sent
     await prisma.notification.update({
       where: { id: notifications.find(n => n.channel === 'EMAIL').id },
       data: { sentAt: new Date(), status: 'sent' }
     });
+        results.email = { success: true };
+      } catch (error) {
+        console.error('Email send failed:', error);
+        results.email = { success: false, error: error.message };
+      }
+    }
 
-    // TODO: Send SMS and Push notifications
-    return { success: true, notificationIds: notifications.map(n => n.id) };
+    // Send Push notification via FCM
+    if (fcmService.isAvailable() && appointment.patient.user.firebase_uid) {
+      try {
+        const fcmNotification = fcmService.createAppointmentNotification(appointment, 'booking');
+        const fcmResult = await fcmService.sendToUser(appointment.patient.user.firebase_uid, fcmNotification);
+        
+        if (fcmResult.success) {
+          await prisma.notification.update({
+            where: { id: notifications.find(n => n.channel === 'PUSH').id },
+            data: { 
+              sentAt: new Date(), 
+              status: 'sent',
+              metadata: JSON.stringify({ 
+                ...JSON.parse(notifications.find(n => n.channel === 'PUSH').metadata),
+                messageId: fcmResult.messageId 
+              })
+            }
+          });
+        }
+        results.push = fcmResult;
+      } catch (error) {
+        console.error('FCM send failed:', error);
+        results.push = { success: false, error: error.message };
+      }
+    }
+
+    // Send SMS via Twilio
+    if (this.twilioClient && appointment.patient.user.phone) {
+      try {
+        const smsResult = await this.sendSMS({
+          to: appointment.patient.user.phone,
+          message: `HealBridge: Your appointment with Dr. ${appointment.doctor.user.phone} is confirmed for ${new Date(appointment.startTs).toLocaleString()}. Booking ID: ${appointment.id}`
+        });
+
+        await prisma.notification.update({
+          where: { id: notifications.find(n => n.channel === 'SMS').id },
+          data: { 
+            sentAt: new Date(), 
+            status: smsResult.status,
+            metadata: JSON.stringify({ 
+              ...JSON.parse(notifications.find(n => n.channel === 'SMS').metadata),
+              messageSid: smsResult.sid,
+              twilioStatus: smsResult.status
+            })
+          }
+        });
+        results.sms = { success: true, sid: smsResult.sid };
+      } catch (error) {
+        console.error('SMS send failed:', error);
+        results.sms = { success: false, error: error.message };
+      }
+    }
+
+    // Send WebSocket notification
+    if (websocketService.isUserConnected(appointment.patient.user_id)) {
+      websocketService.sendNotification(appointment.patient.user_id, {
+        type: 'booking_confirmed',
+        title: 'Appointment Confirmed',
+        message: `Your appointment with Dr. ${appointment.doctor.user.phone} is confirmed`,
+        appointmentId: appointment.id,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return { 
+      success: true, 
+      notificationIds: notifications.map(n => n.id),
+      results 
+    };
   }
 
   // Send 24-hour reminder
@@ -162,13 +250,42 @@ class NotificationService {
       }
     });
 
-    // Send push notification with deep link
-    // TODO: Implement push notification via Firebase/OneSignal
-
+    // Send push notification via FCM with navigation deep link
+    if (fcmService.isAvailable() && appointment.patient.user.firebase_uid) {
+      try {
+        const fcmNotification = fcmService.createAppointmentNotification(appointment, 'reminder_1h');
+        const fcmResult = await fcmService.sendToUser(appointment.patient.user.firebase_uid, fcmNotification);
+        
+        if (fcmResult.success) {
     await prisma.notification.update({
       where: { id: notification.id },
-      data: { sentAt: new Date(), status: 'sent' }
+            data: { 
+              sentAt: new Date(), 
+              status: 'sent',
+              metadata: JSON.stringify({ 
+                navigationLinks,
+                clinicAddress: appointment.clinic.address,
+                messageId: fcmResult.messageId 
+              })
+            }
     });
+        }
+      } catch (error) {
+        console.error('FCM 1-hour reminder failed:', error);
+      }
+    }
+
+    // Send WebSocket notification
+    if (websocketService.isUserConnected(appointment.patient.user_id)) {
+      websocketService.sendNotification(appointment.patient.user_id, {
+        type: 'appointment_reminder',
+        title: 'Appointment in 1 Hour',
+        message: `Your appointment is in 1 hour at ${appointment.clinic.name}`,
+        appointmentId: appointment.id,
+        navigationLinks,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     return { success: true, navigationLinks };
   }
@@ -295,10 +412,61 @@ class NotificationService {
         html,
         attachments
       });
+      console.log(`✅ Email sent to ${to}: ${subject}`);
       return { success: true, messageId: info.messageId };
     } catch (error) {
       console.error('Email send failed:', error);
       throw error;
+    }
+  }
+
+  // Send SMS helper
+  async sendSMS({ to, message }) {
+    if (!this.twilioClient) {
+      throw new Error('Twilio not initialized');
+    }
+
+    try {
+      const result = await this.twilioClient.messages.create({
+        body: message,
+        from: config.TWILIO_PHONE_NUMBER,
+        to: to
+      });
+
+      console.log(`✅ SMS sent to ${to}: ${result.sid}`);
+      
+      return {
+        success: true,
+        sid: result.sid,
+        status: result.status,
+        to: result.to,
+        dateCreated: result.dateCreated
+      };
+    } catch (error) {
+      console.error('SMS send failed:', error);
+      throw error;
+    }
+  }
+
+  // Get SMS delivery status
+  async getSMSStatus(messageSid) {
+    if (!this.twilioClient) {
+      return { error: 'Twilio not initialized' };
+    }
+
+    try {
+      const message = await this.twilioClient.messages(messageSid).fetch();
+      return {
+        sid: message.sid,
+        status: message.status,
+        errorCode: message.errorCode,
+        errorMessage: message.errorMessage,
+        dateSent: message.dateSent,
+        dateUpdated: message.dateUpdated
+      };
+    } catch (error) {
+      console.error('Failed to fetch SMS status:', error);
+      return { error: error.message };
     }
   }
 

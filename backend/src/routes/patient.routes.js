@@ -8,9 +8,11 @@ import upload from '../middleware/upload.middleware.js';
 // All routes require authentication
 router.use(authenticate);
 
-// Patient profile (from Firestore)
+// Patient profile (from Firestore with sync)
 router.get('/profile', patientController.getProfile);
 router.put('/profile', patientController.updateProfile);
+router.get('/data/complete', patientController.getCompleteData); // NEW: Get all patient data
+router.post('/sync/force', patientController.forceSync); // NEW: Force profile sync
 
 // Triage (no profile required)
 router.post('/triage/analyze', patientController.analyzeSyptoms);

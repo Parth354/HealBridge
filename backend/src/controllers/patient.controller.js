@@ -7,9 +7,10 @@ import prescriptionService from '../services/prescription.service.js';
 import medicationService from '../services/medication.service.js';
 import waitTimeService from '../services/waittime.service.js';
 import firestoreService from '../services/firestore.service.js';
+import syncService from '../services/sync.service.js'; // New import
 
 class PatientController {
-  // Get patient profile from Firestore
+  // Get patient profile from Firestore with sync
   async getProfile(req, res) {
     try {
       const firebaseUid = req.user.firebaseUid;
@@ -20,23 +21,41 @@ class PatientController {
         });
       }
 
-      const profile = await firestoreService.getPatientProfile(firebaseUid);
+      // Use sync service for unified profile view
+      const syncedProfile = await syncService.syncPatientProfile(firebaseUid);
 
-      if (!profile) {
+      if (!syncedProfile || !syncedProfile.hasFirestoreProfile) {
         return res.status(404).json({ 
           error: 'Profile not found',
-          message: 'Please complete your profile in the mobile app.'
+          message: 'Please complete your profile in the mobile app.',
+          userId: req.user.userId
         });
       }
 
-      res.json({ success: true, profile });
+      res.json({ 
+        success: true, 
+        profile: syncedProfile,
+        synced: true
+      });
     } catch (error) {
       console.error('Get patient profile error:', error);
-      res.status(500).json({ error: error.message });
+      
+      // Fallback to direct Firestore query if sync fails
+      try {
+        const profile = await firestoreService.getPatientProfile(req.user.firebaseUid);
+        return res.json({ 
+          success: true, 
+          profile, 
+          synced: false,
+          warning: 'Profile retrieved without full sync'
+        });
+      } catch (fallbackError) {
+        res.status(500).json({ error: error.message });
+      }
     }
   }
 
-  // Update patient profile in Firestore
+  // Update patient profile in Firestore and invalidate cache
   async updateProfile(req, res) {
     try {
       const firebaseUid = req.user.firebaseUid;
@@ -48,11 +67,90 @@ class PatientController {
       }
 
       const profileData = req.body;
+      
+      // Validate required fields
+      if (profileData.firstName || profileData.lastName) {
+        if (!profileData.firstName || profileData.firstName.trim().length < 2) {
+          return res.status(400).json({ error: 'First name must be at least 2 characters' });
+        }
+        if (!profileData.lastName || profileData.lastName.trim().length < 2) {
+          return res.status(400).json({ error: 'Last name must be at least 2 characters' });
+        }
+      }
+
+      // Update in Firestore
       const profile = await firestoreService.updatePatientProfile(firebaseUid, profileData);
 
-      res.json({ success: true, profile });
+      // Invalidate cache to force fresh sync
+      await syncService.invalidateUserCache(firebaseUid);
+
+      // Sync the updated profile
+      const syncedProfile = await syncService.syncPatientProfile(firebaseUid);
+
+      res.json({ 
+        success: true, 
+        profile: syncedProfile,
+        message: 'Profile updated successfully'
+      });
     } catch (error) {
       console.error('Update patient profile error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Get complete patient data (profile + appointments + medications + documents)
+  async getCompleteData(req, res) {
+    try {
+      const firebaseUid = req.user.firebaseUid;
+
+      if (!firebaseUid) {
+        return res.status(400).json({ 
+          error: 'Firebase UID not found. Please re-authenticate with Firebase.' 
+        });
+      }
+
+      const completeData = await syncService.getCompletePatientData(firebaseUid);
+
+      if (!completeData) {
+        return res.status(404).json({ 
+          error: 'Patient data not found' 
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        data: completeData 
+      });
+    } catch (error) {
+      console.error('Get complete patient data error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Force profile sync (useful after mobile app updates profile)
+  async forceSync(req, res) {
+    try {
+      const firebaseUid = req.user.firebaseUid;
+
+      if (!firebaseUid) {
+        return res.status(400).json({ 
+          error: 'Firebase UID not found. Please re-authenticate with Firebase.' 
+        });
+      }
+
+      // Invalidate cache
+      await syncService.invalidateUserCache(firebaseUid);
+
+      // Sync profile
+      const syncedProfile = await syncService.syncPatientProfile(firebaseUid);
+
+      res.json({ 
+        success: true, 
+        message: 'Profile synced successfully',
+        profile: syncedProfile
+      });
+    } catch (error) {
+      console.error('Force sync error:', error);
       res.status(500).json({ error: error.message });
     }
   }

@@ -71,19 +71,43 @@ const DoctorProfileSetup = () => {
     setIsSubmitting(true);
 
     try {
-      await createDoctorProfile(authToken, {
+      const response = await createDoctorProfile(authToken, {
         specialties: formData.specialties,
         licenseNo: formData.licenseNo.trim()
       });
 
       showSuccess('Profile created successfully!');
       
-      // Force auth context refresh
+      // Update user in localStorage with hasProfile flag
+      const storedUser = localStorage.getItem('doctor');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        user.hasProfile = true;
+        if (response.doctor) {
+          user.doctorId = response.doctor.id;
+          user.registrationNumber = response.doctor.licenseNo;
+          user.specialization = Array.isArray(response.doctor.specialties) 
+            ? response.doctor.specialties.join(', ') 
+            : response.doctor.specialties;
+        }
+        localStorage.setItem('doctor', JSON.stringify(user));
+      }
+      
+      // Force full page reload to refresh auth context
       window.location.href = '/dashboard';
     } catch (error) {
       if (error.message.includes('already exists')) {
         showError('Profile already exists! Redirecting to dashboard.');
-        setTimeout(() => navigate('/dashboard'), 2000);
+        // Update hasProfile flag even if profile exists
+        const storedUser = localStorage.getItem('doctor');
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          user.hasProfile = true;
+          localStorage.setItem('doctor', JSON.stringify(user));
+        }
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 2000);
       } else {
         showError(error.message || 'Failed to create profile');
       }
