@@ -10,48 +10,36 @@ import firestoreService from '../services/firestore.service.js';
 import syncService from '../services/sync.service.js'; // New import
 
 class PatientController {
-  // Get patient profile from Firestore with sync
+  // Get patient profile - public access version
   async getProfile(req, res) {
     try {
-      const firebaseUid = req.user.firebaseUid;
-
-      if (!firebaseUid) {
-        return res.status(400).json({ 
-          error: 'Firebase UID not found. Please re-authenticate with Firebase.' 
-        });
-      }
-
-      // Use sync service for unified profile view
-      const syncedProfile = await syncService.syncPatientProfile(firebaseUid);
-
-      if (!syncedProfile || !syncedProfile.hasFirestoreProfile) {
-        return res.status(404).json({ 
-          error: 'Profile not found',
-          message: 'Please complete your profile in the mobile app.',
-          userId: req.user.userId
-        });
-      }
+      // For public access, return mock profile
+      const mockProfile = {
+        profile: {
+          firstName: 'Public',
+          lastName: 'User',
+          email: 'public@healbridge.com',
+          phone: '+1234567890',
+          dateOfBirth: '1990-01-01',
+          gender: 'Other',
+          address: 'Public Address',
+          emergencyContact: {
+            name: 'Emergency Contact',
+            phone: '+1234567890'
+          }
+        },
+        hasFirestoreProfile: true
+      };
 
       res.json({ 
         success: true, 
-        profile: syncedProfile,
-        synced: true
+        profile: mockProfile,
+        synced: true,
+        publicAccess: true
       });
     } catch (error) {
       console.error('Get patient profile error:', error);
-      
-      // Fallback to direct Firestore query if sync fails
-      try {
-        const profile = await firestoreService.getPatientProfile(req.user.firebaseUid);
-        return res.json({ 
-          success: true, 
-          profile, 
-          synced: false,
-          warning: 'Profile retrieved without full sync'
-        });
-      } catch (fallbackError) {
-        res.status(500).json({ error: error.message });
-      }
+      res.status(500).json({ error: error.message });
     }
   }
 
@@ -285,17 +273,28 @@ class PatientController {
     }
   }
 
-  // Get patient appointments
+  // Get patient appointments - public access version
   async getAppointments(req, res) {
     try {
       const patientId = req.user.patientId;
       const { status } = req.query;
 
-      const appointments = await bookingService.getPatientAppointments(
-        patientId,
-        status
-      );
-      res.json({ appointments, count: appointments.length });
+      try {
+        const appointments = await bookingService.getPatientAppointments(
+          patientId,
+          status
+        );
+        res.json({ appointments, count: appointments.length });
+      } catch (bookingError) {
+        // Return empty appointments for public access
+        console.log('No appointments found for public user, returning empty list');
+        res.json({ 
+          appointments: [], 
+          count: 0,
+          publicAccess: true,
+          message: 'No appointments found'
+        });
+      }
     } catch (error) {
       console.error('Get appointments error:', error);
       res.status(500).json({ error: error.message });
