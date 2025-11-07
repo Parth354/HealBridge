@@ -66,5 +66,19 @@ fun prefsFlow(context: Context): Flow<PatientProfile?> =
 suspend fun currentPrefs(context: Context): PatientProfile? =
     context.userDataStore.data.first().toProfileOrNull()
 
+suspend fun clearAll(context: Context) {
+    context.userDataStore.edit { it.clear() }
+}
+
+fun getUserId(context: Context): String? {
+    return try {
+        kotlinx.coroutines.runBlocking {
+            context.userDataStore.data.first()[Keys.uid]
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
+
 fun Preferences.toProfileOrNull(): PatientProfile? =
    UserPreferencesMapper.fromPreferences(this)
