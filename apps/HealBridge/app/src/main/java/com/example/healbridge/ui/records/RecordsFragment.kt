@@ -227,6 +227,27 @@ class RecordsFragment : Fragment() {
         records.clear()
         records.addAll(sampleRecords)
         recordsAdapter.notifyDataSetChanged()
+        updateStatistics()
+        updateEmptyState()
+    }
+    
+    private fun updateStatistics() {
+        if (_binding != null) {
+            binding.tvTotalRecords.text = records.size.toString()
+            binding.tvRecentUploads.text = "1" // Sample data
+        }
+    }
+    
+    private fun updateEmptyState() {
+        if (_binding != null) {
+            if (records.isEmpty()) {
+                binding.layoutEmptyState.visibility = View.VISIBLE
+                binding.rvRecords.visibility = View.GONE
+            } else {
+                binding.layoutEmptyState.visibility = View.GONE
+                binding.rvRecords.visibility = View.VISIBLE
+            }
+        }
     }
     
     private fun showRecordDetails(record: MedicalRecord) {

@@ -18,6 +18,12 @@
         tools:layout="@layout/fragment_appointments" />
 
     <fragment
+        android:id="@+id/tab_map"
+        android:name="com.example.healbridge.ui.map.MapFragment"
+        android:label="Map"
+        tools:layout="@layout/fragment_map" />
+
+    <fragment
         android:id="@+id/tab_records"
         android:name="com.example.healbridge.ui.records.RecordsFragment"
         android:label="Records"

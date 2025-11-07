@@ -59,11 +59,27 @@ class ProfileFragment : Fragment() {
             firestore.collection("users").document(uid).get()
                 .addOnSuccessListener { document ->
                     if (document.exists()) {
-                        binding.tvName.text = document.getString("name") ?: "Name not set"
-                        binding.tvPhone.text = document.getString("phone") ?: "Phone not set"
+                        val firstName = document.getString("firstName") ?: ""
+                        val lastName = document.getString("lastName") ?: ""
+                        val fullName = "$firstName $lastName".trim()
+                        
+                        binding.tvName.text = if (fullName.isNotEmpty()) fullName else "Name not set"
+                        binding.tvPhone.text = document.getString("phoneNumber") ?: "Phone not set"
+                    } else {
+                        binding.tvName.text = "Complete your profile"
+                        binding.tvPhone.text = "Add your details"
                     }
                 }
+                .addOnFailureListener {
+                    binding.tvName.text = "Error loading profile"
+                    binding.tvPhone.text = "Please try again"
+                }
         }
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        loadUserProfile() // Refresh profile data when returning from edit
     }
     
     private fun showMedicalInfo() {

@@ -27,6 +27,7 @@ junit = "4.13.2"
 androidx-junit = "1.2.1"
 androidx-espresso-core = "3.6.1"
 firebase-appcheck-debug = "19.0.1"
+play-services-location = "21.3.0"
 
 [libraries]
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
@@ -73,6 +74,7 @@ androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 firebase-appcheck-debug = { group = "com.google.firebase", name = "firebase-appcheck-debug", version.ref = "firebase-appcheck-debug" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "converter-gson" }
+play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "play-services-location" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

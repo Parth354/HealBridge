@@ -73,6 +73,7 @@ class Home : AppCompatActivity() {
             binding.mainNav.isVisible = dest.id in setOf(
                 R.id.tab_home,
                 R.id.tab_appointments,
+                R.id.tab_map,
                 R.id.tab_records,
                 R.id.tab_profile
             )

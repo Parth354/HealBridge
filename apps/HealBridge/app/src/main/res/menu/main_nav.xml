@@ -2,6 +2,7 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@+id/tab_home" android:icon="@drawable/ic_home" android:title="Home"/>
     <item android:id="@+id/tab_appointments" android:icon="@drawable/ic_calendar" android:title="Appointments"/>
+    <item android:id="@+id/tab_map" android:icon="@drawable/ic_location" android:title="Map"/>
     <item android:id="@+id/tab_records" android:icon="@drawable/ic_folder" android:title="Records"/>
     <item android:id="@+id/tab_profile" android:icon="@drawable/ic_person" android:title="Profile"/>
 </menu>
