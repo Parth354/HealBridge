@@ -7,6 +7,13 @@ data class SlotHoldRequest(
     val endTs: String
 )
 
+data class ConfirmAppointmentRequest(
+    val holdId: String,
+    val visitType: String = "CLINIC", // CLINIC, HOUSE, TELE
+    val address: String? = null,
+    val feeMock: Double = 500.0
+)
+
 data class BookingConfirmRequest(
     val holdId: String,
     val visitType: String, // CLINIC, HOUSE

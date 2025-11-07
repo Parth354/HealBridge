@@ -3,7 +3,7 @@ export const APP_NAME = 'HealBridge Doctor';
 export const APP_VERSION = '1.0.0';
 
 // API Base URL (mock)
-export const API_BASE_URL = 'http://localhost:3000/api';
+export const API_BASE_URL = 'https://healbridgebackend.onrender.com/api';
 
 // Routes
 export const ROUTES = {

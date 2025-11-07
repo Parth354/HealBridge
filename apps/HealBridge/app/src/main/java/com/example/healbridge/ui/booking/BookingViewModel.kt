@@ -171,20 +171,23 @@ class BookingViewModel : ViewModel() {
     private fun createSlotHold() {
         val doctor = _selectedDoctor.value ?: return
         val slot = _selectedSlot.value ?: return
-        val date = _selectedDate.value ?: return
         
         viewModelScope.launch {
             _isLoading.value = true
             val request = SlotHoldRequest(
                 doctorId = doctor.id,
                 clinicId = "default", // You might need to get this from doctor data
-                startTs = "$date ${slot.time}",
-                endTs = "$date ${getEndTime(slot.time)}"
+                startTs = slot.startTs,
+                endTs = slot.endTs
             )
             
             when (val result = apiRepository.createSlotHold(request)) {
                 is NetworkResult.Success -> {
-                    _slotHold.value = result.data
+                    _slotHold.value = SlotHold(
+                        holdId = result.data.holdId,
+                        expiresAt = result.data.expiresAt,
+                        expiresInSeconds = result.data.expiresInSeconds
+                    )
                     _currentStep.value = 3
                 }
                 is NetworkResult.Error -> {
@@ -203,16 +206,19 @@ class BookingViewModel : ViewModel() {
         
         viewModelScope.launch {
             _isLoading.value = true
-            val request = BookingConfirmRequest(
+            val request = ConfirmAppointmentRequest(
                 holdId = hold.holdId,
                 visitType = visitType,
-                symptoms = symptoms,
-                notes = notes
+                address = if (visitType == "HOUSE") "Default Address" else null,
+                feeMock = 500.0
             )
             
-            when (val result = apiRepository.confirmBooking(request)) {
+            when (val result = apiRepository.confirmAppointment(request)) {
                 is NetworkResult.Success -> {
-                    _bookingConfirmation.value = result.data
+                    _bookingConfirmation.value = BookingConfirmation(
+                        success = result.data.success,
+                        appointment = result.data.appointment
+                    )
                     // Navigate to success screen or finish activity
                 }
                 is NetworkResult.Error -> {
