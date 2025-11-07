@@ -23,5 +23,8 @@ export default {
   TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER,
   // Firebase Configuration
   FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT,
-  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || 'healbridge-dd480'
+  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
+  // Firebase Web Config (for development fallback)
+  FIREBASE_API_KEY: process.env.FIREBASE_API_KEY,
+  FIREBASE_AUTH_DOMAIN: process.env.FIREBASE_AUTH_DOMAIN
 };

@@ -8,6 +8,28 @@ import upload from '../middleware/upload.middleware.js';
 // All routes require authentication
 router.use(authenticate);
 
+// Add role check for patient routes
+router.use((req, res, next) => {
+  if (req.user.role !== 'PATIENT') {
+    return res.status(403).json({ error: 'Patient access required' });
+  }
+  next();
+});
+
+// Test authentication (no profile required)
+router.get('/test/auth', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Authentication successful',
+    user: {
+      userId: req.user.userId,
+      role: req.user.role,
+      firebaseUid: req.user.firebaseUid,
+      hasPatientProfile: !!req.user.patientId
+    }
+  });
+});
+
 // Patient profile (from Firestore with sync)
 router.get('/profile', patientController.getProfile);
 router.put('/profile', patientController.updateProfile);
@@ -22,12 +44,12 @@ router.get('/triage/categories', patientController.getCategories);
 router.get('/doctors/search', patientController.searchDoctors);
 router.get('/doctors/:doctorId/clinics/:clinicId/availability', patientController.getDoctorAvailability);
 
-// Booking (requires profile in Firestore - checked in controller)
-router.post('/bookings/hold', validate(schemas.createSlotHold), patientController.createSlotHold);
-router.post('/bookings/confirm', validate(schemas.confirmAppointment), patientController.confirmAppointment);
-router.get('/appointments', patientController.getAppointments);
-router.post('/appointments/:appointmentId/checkin', patientController.checkIn);
-router.delete('/appointments/:appointmentId', patientController.cancelAppointment);
+// Booking (requires patient profile)
+router.post('/bookings/hold', requirePatientProfile, validate(schemas.createSlotHold), patientController.createSlotHold);
+router.post('/bookings/confirm', requirePatientProfile, validate(schemas.confirmAppointment), patientController.confirmAppointment);
+router.get('/appointments', requirePatientProfile, patientController.getAppointments);
+router.post('/appointments/:appointmentId/checkin', requirePatientProfile, patientController.checkIn);
+router.delete('/appointments/:appointmentId', requirePatientProfile, patientController.cancelAppointment);
 
 // Wait time
 router.get('/appointments/:appointmentId/waittime', patientController.getWaitTime);

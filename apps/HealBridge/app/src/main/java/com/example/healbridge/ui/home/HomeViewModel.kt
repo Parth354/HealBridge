@@ -31,6 +31,35 @@ class HomeViewModel : ViewModel() {
     
     init {
         loadHealthTip()
+        testAuthentication()
+    }
+    
+    private fun testAuthentication() {
+        viewModelScope.launch {
+            // Test basic connectivity
+            when (val healthResult = apiRepository.healthCheck()) {
+                is NetworkResult.Success -> {
+                    println("✅ Health check passed: ${healthResult.data}")
+                    
+                    // Test authentication
+                    when (val authResult = apiRepository.testPatientAuth()) {
+                        is NetworkResult.Success -> {
+                            println("✅ Patient auth test passed: ${authResult.data}")
+                        }
+                        is NetworkResult.Error -> {
+                            println("❌ Patient auth test failed: ${authResult.message}")
+                            _error.value = "Authentication failed: ${authResult.message}"
+                        }
+                        is NetworkResult.Loading -> {}
+                    }
+                }
+                is NetworkResult.Error -> {
+                    println("❌ Health check failed: ${healthResult.message}")
+                    _error.value = "Server connection failed: ${healthResult.message}"
+                }
+                is NetworkResult.Loading -> {}
+            }
+        }
     }
     
     fun loadUserProfile() {
@@ -39,9 +68,11 @@ class HomeViewModel : ViewModel() {
             when (val result = apiRepository.getPatientProfile()) {
                 is NetworkResult.Success -> {
                     _userProfile.value = result.data
+                    println("✅ Profile loaded successfully")
                 }
                 is NetworkResult.Error -> {
-                    _error.value = result.message
+                    _error.value = "Profile error: ${result.message}"
+                    println("❌ Profile load failed: ${result.message}")
                 }
                 is NetworkResult.Loading -> {
                     // Handle loading state

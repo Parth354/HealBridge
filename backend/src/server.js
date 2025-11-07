@@ -81,6 +81,54 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Test authentication endpoint
+app.get('/api/test/auth', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    console.log('Test auth - Token length:', token.length);
+    console.log('Test auth - Token preview:', token.substring(0, 50) + '...');
+    
+    res.json({
+      message: 'Token received',
+      tokenLength: token.length,
+      tokenPreview: token.substring(0, 50) + '...'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Test database connectivity
+app.get('/api/test/db', async (req, res) => {
+  try {
+    const { default: prisma } = await import('./config/prisma.js');
+    
+    const userCount = await prisma.user.count();
+    const doctorCount = await prisma.doctor.count();
+    const patientCount = await prisma.patient.count();
+    
+    res.json({
+      success: true,
+      database: 'connected',
+      counts: {
+        users: userCount,
+        doctors: doctorCount,
+        patients: patientCount
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: 'Database connection failed',
+      message: error.message 
+    });
+  }
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/patient', patientRoutes);

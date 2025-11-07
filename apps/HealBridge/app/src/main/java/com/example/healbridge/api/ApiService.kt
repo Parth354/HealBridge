@@ -6,6 +6,10 @@ import retrofit2.http.*
 
 interface ApiService {
     
+    // Health check
+    @GET("health")
+    suspend fun healthCheck(): Response<Map<String, Any>>
+    
     // Doctor Search
     @GET("api/patient/doctors/search")
     suspend fun searchDoctors(
@@ -78,4 +82,14 @@ interface ApiService {
     // Firebase authentication
     @POST("api/auth/firebase/login")
     suspend fun registerFirebaseUser(@Body request: Map<String, String>): Response<SuccessResponse>
+    
+    // Test endpoints
+    @GET("api/test/auth")
+    suspend fun testAuth(): Response<Map<String, Any>>
+    
+    @GET("api/test/db")
+    suspend fun testDatabase(): Response<Map<String, Any>>
+    
+    @GET("api/patient/test/auth")
+    suspend fun testPatientAuth(): Response<Map<String, Any>>
 }

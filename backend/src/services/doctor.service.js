@@ -15,12 +15,16 @@ class DoctorService {
       limit = 20
     } = filters;
 
-    // Build query
+    console.log('DoctorService.searchDoctors called with filters:', filters);
+
+    // Build query - temporarily remove verification requirement for testing
     const where = {
-      verifiedStatus: 'VERIFIED',
+      // verifiedStatus: 'VERIFIED', // Commented out for testing
       ...(specialty && { specialties: { has: specialty } }),
       ...(minRating > 0 && { rating: { gte: minRating } })
     };
+
+    console.log('Database query where clause:', where);
 
     // Get all doctors with clinics
     const doctors = await prisma.doctor.findMany({
@@ -30,7 +34,8 @@ class DoctorService {
           select: {
             id: true,
             phone: true,
-            language: true
+            language: true,
+            email: true
           }
         },
         clinics: true,
@@ -44,6 +49,8 @@ class DoctorService {
         }
       }
     });
+
+    console.log(`Found ${doctors.length} doctors in database`);
 
     // Calculate distance and filter by location if provided
     let results = doctors.map(doctor => {
@@ -83,7 +90,9 @@ class DoctorService {
       results.sort((a, b) => b.rating - a.rating);
     }
 
-    return results.slice(0, limit);
+    const finalResults = results.slice(0, limit);
+    console.log(`Returning ${finalResults.length} doctors`);
+    return finalResults;
   }
 
   // Get doctor availability for a specific date

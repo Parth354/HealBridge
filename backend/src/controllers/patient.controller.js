@@ -183,7 +183,7 @@ class PatientController {
     }
   }
 
-  // Search doctors
+  // Search doctors - no authentication required for browsing
   async searchDoctors(req, res) {
     try {
       const filters = {
@@ -197,8 +197,16 @@ class PatientController {
         limit: parseInt(req.query?.limit) || 20
       };
 
+      console.log('Searching doctors with filters:', filters);
       const doctors = await doctorService.searchDoctors(filters);
-      res.json({ doctors, count: doctors.length });
+      console.log(`Found ${doctors.length} doctors`);
+      
+      res.json({ 
+        success: true,
+        doctors, 
+        count: doctors.length,
+        filters: filters
+      });
     } catch (error) {
       console.error('Search doctors error:', error);
       res.status(500).json({ error: error.message });

@@ -235,4 +235,57 @@ class ApiRepository {
             NetworkResult.Error(e.message ?: "Network error")
         }
     }
+    
+    // Test endpoints for debugging
+    suspend fun testAuth(): NetworkResult<Map<String, Any>> {
+        return try {
+            val response = apiService.testAuth()
+            if (response.isSuccessful && response.body() != null) {
+                NetworkResult.Success(response.body()!!)
+            } else {
+                NetworkResult.Error("Auth test failed", response.code())
+            }
+        } catch (e: Exception) {
+            NetworkResult.Error(e.message ?: "Network error")
+        }
+    }
+    
+    suspend fun testPatientAuth(): NetworkResult<Map<String, Any>> {
+        return try {
+            val response = apiService.testPatientAuth()
+            if (response.isSuccessful && response.body() != null) {
+                NetworkResult.Success(response.body()!!)
+            } else {
+                NetworkResult.Error("Patient auth test failed", response.code())
+            }
+        } catch (e: Exception) {
+            NetworkResult.Error(e.message ?: "Network error")
+        }
+    }
+    
+    suspend fun testDatabase(): NetworkResult<Map<String, Any>> {
+        return try {
+            val response = apiService.testDatabase()
+            if (response.isSuccessful && response.body() != null) {
+                NetworkResult.Success(response.body()!!)
+            } else {
+                NetworkResult.Error("Database test failed", response.code())
+            }
+        } catch (e: Exception) {
+            NetworkResult.Error(e.message ?: "Network error")
+        }
+    }
+    
+    suspend fun healthCheck(): NetworkResult<Map<String, Any>> {
+        return try {
+            val response = apiService.healthCheck()
+            if (response.isSuccessful && response.body() != null) {
+                NetworkResult.Success(response.body()!!)
+            } else {
+                NetworkResult.Error("Health check failed", response.code())
+            }
+        } catch (e: Exception) {
+            NetworkResult.Error(e.message ?: "Network error")
+        }
+    }
 }
