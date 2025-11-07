@@ -21,8 +21,8 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     // Check for existing session
     const checkAuth = async () => {
-      const storedToken = sessionStorage.getItem('authToken');
-      const storedUser = sessionStorage.getItem('doctor');
+      const storedToken = localStorage.getItem('authToken');
+      const storedUser = localStorage.getItem('doctor');
       
       if (storedToken && storedUser) {
         try {
@@ -31,14 +31,14 @@ export const AuthProvider = ({ children }) => {
           setUser(parsedUser);
           setIsAuthenticated(true);
           
-          // Optionally verify token with backend
+          // Verify token with backend and get fresh user data
           try {
             const response = await getCurrentUser(storedToken);
             if (response.success && response.user) {
               // Update with fresh user data from backend
               const updatedUser = transformBackendUser(response.user);
               setUser(updatedUser);
-              sessionStorage.setItem('doctor', JSON.stringify(updatedUser));
+              localStorage.setItem('doctor', JSON.stringify(updatedUser));
             }
           } catch (error) {
             console.error('Token validation failed:', error);
@@ -47,8 +47,8 @@ export const AuthProvider = ({ children }) => {
           }
         } catch (error) {
           console.error('Error parsing stored user:', error);
-          sessionStorage.removeItem('doctor');
-          sessionStorage.removeItem('authToken');
+          localStorage.removeItem('doctor');
+          localStorage.removeItem('authToken');
         }
       }
       setIsLoading(false);
@@ -60,7 +60,18 @@ export const AuthProvider = ({ children }) => {
   // Transform backend user data to frontend format
   const transformBackendUser = (backendUser) => {
     const hasDoctor = !!backendUser.doctor;
-    const doctorName = backendUser.doctor?.name || `Dr. ${backendUser.phone || 'User'}`;
+    
+    // Construct doctor name from firstName and lastName
+    let doctorName;
+    if (backendUser.doctor) {
+      const firstName = backendUser.doctor.firstName || '';
+      const lastName = backendUser.doctor.lastName || '';
+      const fullName = `Dr. ${firstName} ${lastName}`.trim();
+      doctorName = fullName !== 'Dr.' ? fullName : `Dr. ${backendUser.phone || 'User'}`;
+    } else {
+      doctorName = `Dr. ${backendUser.phone || 'User'}`;
+    }
+    
     const specialties = Array.isArray(backendUser.doctor?.specialties) 
       ? backendUser.doctor.specialties.join(', ') 
       : backendUser.doctor?.specialties || 'General Medicine';
@@ -124,7 +135,7 @@ export const AuthProvider = ({ children }) => {
       if (response.success && response.token) {
         // Store token
         setAuthToken(response.token);
-        sessionStorage.setItem('authToken', response.token);
+        localStorage.setItem('authToken', response.token);
         
         // Check if user has doctor profile
         let finalUser = response.user;
@@ -134,7 +145,7 @@ export const AuthProvider = ({ children }) => {
         const transformedUser = transformBackendUser(finalUser);
         setUser(transformedUser);
         setIsAuthenticated(true);
-        sessionStorage.setItem('doctor', JSON.stringify(transformedUser));
+        localStorage.setItem('doctor', JSON.stringify(transformedUser));
         
         // Clear pending auth
         setPendingAuth(null);
@@ -154,14 +165,14 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
     setAuthToken(null);
     setPendingAuth(null);
-    sessionStorage.removeItem('doctor');
-    sessionStorage.removeItem('authToken');
+    localStorage.removeItem('doctor');
+    localStorage.removeItem('authToken');
   };
 
   const updateUser = (updatedData) => {
     const updatedUser = { ...user, ...updatedData };
     setUser(updatedUser);
-    sessionStorage.setItem('doctor', JSON.stringify(updatedUser));
+    localStorage.setItem('doctor', JSON.stringify(updatedUser));
   };
 
   const value = {

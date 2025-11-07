@@ -14,7 +14,7 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     // Add auth token if available
-    const token = sessionStorage.getItem('authToken');
+    const token = localStorage.getItem('authToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -47,8 +47,8 @@ apiClient.interceptors.response.use(
       switch (status) {
         case 401:
           // Unauthorized - redirect to login
-          sessionStorage.removeItem('authToken');
-          sessionStorage.removeItem('doctor');
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('doctor');
           window.location.href = '/login';
           break;
         case 403:
