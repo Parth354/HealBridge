@@ -20,5 +20,8 @@ export default {
   // Twilio SMS Configuration
   TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
   TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
-  TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER
+  TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER,
+  // Firebase Configuration
+  FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT,
+  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || 'healbridge-dd480'
 };

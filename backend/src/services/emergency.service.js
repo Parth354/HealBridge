@@ -1,6 +1,7 @@
 import prisma from '../config/prisma.js';
 import notificationService from './notification.service.js';
 import doctorService from './doctor.service.js';
+import firestoreService from './firestore.service.js';
 
 class EmergencyService {
   // Handle doctor emergency leave
@@ -69,6 +70,22 @@ class EmergencyService {
 
   // Reschedule emergency appointment
   async rescheduleEmergencyAppointment(appointment) {
+    // Get patient data from Firestore
+    let patientName = 'Patient';
+    if (appointment.patient && appointment.patient.user && appointment.patient.user.firebase_uid) {
+      try {
+        const patientData = await firestoreService.getPatientByUser(appointment.patient.user);
+        if (patientData) {
+          patientName = patientData.name;
+        }
+      } catch (error) {
+        console.warn('Failed to get patient name from Firestore:', error);
+      }
+    }
+    
+    // Attach patient name to appointment for notification
+    appointment.patientName = patientName;
+
     // Find alternative doctors
     const alternatives = await this.findAlternativeDoctors(
       appointment.doctor.specialties[0],
@@ -240,7 +257,7 @@ class EmergencyService {
           </div>
           
           <div style="padding: 30px;">
-            <p>Dear ${appointment.patient.name},</p>
+            <p>Dear ${appointment.patientName || 'Patient'},</p>
             
             <p>We sincerely apologize for the inconvenience. Your appointment scheduled for:</p>
             

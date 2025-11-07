@@ -6,8 +6,57 @@ import ragService from '../services/rag.service.js';
 import prescriptionService from '../services/prescription.service.js';
 import medicationService from '../services/medication.service.js';
 import waitTimeService from '../services/waittime.service.js';
+import firestoreService from '../services/firestore.service.js';
 
 class PatientController {
+  // Get patient profile from Firestore
+  async getProfile(req, res) {
+    try {
+      const firebaseUid = req.user.firebaseUid;
+
+      if (!firebaseUid) {
+        return res.status(400).json({ 
+          error: 'Firebase UID not found. Please re-authenticate with Firebase.' 
+        });
+      }
+
+      const profile = await firestoreService.getPatientProfile(firebaseUid);
+
+      if (!profile) {
+        return res.status(404).json({ 
+          error: 'Profile not found',
+          message: 'Please complete your profile in the mobile app.'
+        });
+      }
+
+      res.json({ success: true, profile });
+    } catch (error) {
+      console.error('Get patient profile error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Update patient profile in Firestore
+  async updateProfile(req, res) {
+    try {
+      const firebaseUid = req.user.firebaseUid;
+
+      if (!firebaseUid) {
+        return res.status(400).json({ 
+          error: 'Firebase UID not found. Please re-authenticate with Firebase.' 
+        });
+      }
+
+      const profileData = req.body;
+      const profile = await firestoreService.updatePatientProfile(firebaseUid, profileData);
+
+      res.json({ success: true, profile });
+    } catch (error) {
+      console.error('Update patient profile error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   // Triage: Analyze symptoms
   async analyzeSyptoms(req, res) {
     try {

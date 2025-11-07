@@ -49,8 +49,9 @@ enum LicenseStatus {
 model User {
   id            String   @id @default(cuid())
   role          UserRole
-  phone         String   @unique
+  phone         String?  @unique
   email         String?  @unique
+  firebase_uid  String?  @unique
   language      String   @default("en")
   verified      Boolean  @default(false)
   createdAt     DateTime @default(now())
@@ -61,6 +62,8 @@ model User {
   patient      Patient?
   notifications Notification[]
   @@index([phone])
+  @@index([firebase_uid])
+  @@index([email])
 }
 
 model Patient {

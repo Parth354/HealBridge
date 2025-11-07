@@ -7,17 +7,20 @@ import upload from '../middleware/upload.middleware.js';
 
 // All routes require authentication
 router.use(authenticate);
-router.use(requirePatientProfile);
 
-// Triage
+// Patient profile (from Firestore)
+router.get('/profile', patientController.getProfile);
+router.put('/profile', patientController.updateProfile);
+
+// Triage (no profile required)
 router.post('/triage/analyze', patientController.analyzeSyptoms);
 router.get('/triage/categories', patientController.getCategories);
 
-// Doctor search
+// Doctor search (no profile required)
 router.get('/doctors/search', patientController.searchDoctors);
 router.get('/doctors/:doctorId/clinics/:clinicId/availability', patientController.getDoctorAvailability);
 
-// Booking
+// Booking (requires profile in Firestore - checked in controller)
 router.post('/bookings/hold', validate(schemas.createSlotHold), patientController.createSlotHold);
 router.post('/bookings/confirm', validate(schemas.confirmAppointment), patientController.confirmAppointment);
 router.get('/appointments', patientController.getAppointments);

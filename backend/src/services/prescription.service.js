@@ -1,5 +1,6 @@
 import prisma from '../config/prisma.js';
 import notificationService from './notification.service.js';
+import firestoreService from './firestore.service.js';
 import PDFDocument from 'pdfkit';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -22,12 +23,12 @@ class PrescriptionService {
       labTests
     } = data;
 
-    // Get appointment details
+    // Get appointment details (WITHOUT patient data from PostgreSQL)
     const appointment = await prisma.appointment.findUnique({
       where: { id: appointmentId },
       include: {
         doctor: { include: { user: true } },
-        patient: { include: { user: true } },
+        patient: { include: { user: true } }, // Only get user with firebase_uid
         clinic: true
       }
     });
@@ -39,6 +40,22 @@ class PrescriptionService {
     if (appointment.status !== 'STARTED' && appointment.status !== 'COMPLETED') {
       throw new Error('Appointment must be in progress to create prescription');
     }
+
+    // Get patient data from Firestore
+    const patientData = await firestoreService.getPatientByUser(appointment.patient.user);
+    
+    if (!patientData) {
+      console.warn(`Patient data not found in Firestore for user ${appointment.patient.user.id}`);
+      // Create minimal patient data for PDF
+      patientData = {
+        name: 'Patient',
+        dob: null,
+        gender: 'Unknown'
+      };
+    }
+
+    // Attach patient data to appointment for PDF generation
+    appointment.patientData = patientData;
 
     // Generate PDF
     const pdfUrl = await this.generatePrescriptionPDF({
@@ -196,12 +213,14 @@ class PrescriptionService {
          .fillAndStroke('#f5f5f5', '#cccccc');
       
       const patientInfoY = doc.y + 10;
+      // Use patientData from Firestore if available
+      const patient = appointment.patientData || appointment.patient;
       doc.fillColor('#000000')
          .fontSize(10)
          .font('Helvetica')
-         .text(`Name: ${patient.name}`, 60, patientInfoY);
+         .text(`Name: ${patient.name || 'Patient'}`, 60, patientInfoY);
       
-      doc.text(`Age: ${this.calculateAge(patient.dob)} years | Gender: ${patient.gender}`, 60, patientInfoY + 20);
+      doc.text(`Age: ${patient.dob ? this.calculateAge(patient.dob) : 'N/A'} years | Gender: ${patient.gender || 'N/A'}`, 60, patientInfoY + 20);
       doc.text(`Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, 60, patientInfoY + 40);
       doc.text(`Appointment ID: ${appointment.id}`, 60, patientInfoY + 60);
 
@@ -508,10 +527,10 @@ class PrescriptionService {
           </div>
         </div>
 
-        <div class="patient-info">
+          <div class="patient-info">
           <strong>Patient Information</strong><br>
-          Name: ${patient.name}<br>
-          Age: ${this.calculateAge(patient.dob)} years | Gender: ${patient.gender}<br>
+          Name: ${(appointment.patientData || patient).name || 'Patient'}<br>
+          Age: ${(appointment.patientData || patient).dob ? this.calculateAge((appointment.patientData || patient).dob) : 'N/A'} years | Gender: ${(appointment.patientData || patient).gender || 'N/A'}<br>
           Date: ${new Date().toLocaleDateString()}<br>
           Appointment ID: ${appointment.id}
         </div>

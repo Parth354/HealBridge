@@ -1,11 +1,18 @@
 import authService from '../services/auth.service.js';
 
 class AuthController {
-  // Send OTP to phone number
+  // Send OTP to phone number (DOCTORS/STAFF ONLY)
   async sendOTP(req, res) {
     try {
-      let { phone } = req.body;
+      let { phone, role } = req.body;
       
+      // Block patient OTP requests
+      if (role === 'PATIENT') {
+        return res.status(403).json({ 
+          error: 'Patient login via OTP is disabled. Please use Gmail login.',
+          useFirebaseAuth: true
+        });
+      }
 
       if (!phone) {
         return res.status(400).json({ error: 'Phone number is required' });
@@ -19,16 +26,24 @@ class AuthController {
     }
   }
 
-  // Verify OTP and login/register
+  // Verify OTP and login/register (DOCTORS/STAFF ONLY)
   async verifyOTP(req, res) {
     try {
       const { phone, otp, role } = req.body;
+
+      // Block patient OTP verification
+      if (role === 'PATIENT') {
+        return res.status(403).json({ 
+          error: 'Patient login via OTP is disabled. Please use Gmail login.',
+          useFirebaseAuth: true
+        });
+      }
 
       if (!phone || !otp) {
         return res.status(400).json({ error: 'Phone and OTP are required' });
       }
 
-      const result = await authService.verifyOTP(phone, otp, role || 'PATIENT');
+      const result = await authService.verifyOTP(phone, otp, role || 'DOCTOR');
       res.json(result);
     } catch (error) {
       console.error('Verify OTP error:', error);
@@ -36,14 +51,13 @@ class AuthController {
     }
   }
 
-  // Create patient profile
+  // Create patient profile (DEPRECATED - Use Firestore directly)
   async createPatientProfile(req, res) {
     try {
-      const userId = req.user.userId;
-      const profileData = req.body;
-
-      const patient = await authService.createPatientProfile(userId, profileData);
-      res.json({ success: true, patient });
+      return res.status(410).json({ 
+        error: 'This endpoint is deprecated. Patient profiles are managed in Firebase Firestore.',
+        message: 'Please update your patient profile in the mobile app. It will automatically sync to Firestore.'
+      });
     } catch (error) {
       console.error('Create patient profile error:', error);
       res.status(500).json({ error: error.message });
@@ -111,6 +125,45 @@ class AuthController {
       res.json({ user });
     } catch (error) {
       console.error('Get current user error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Firebase authentication: Login/Register with Firebase ID token
+  async authenticateWithFirebase(req, res) {
+    try {
+      const { firebaseToken, role } = req.body;
+
+      if (!firebaseToken) {
+        return res.status(400).json({ error: 'Firebase token is required' });
+      }
+
+      const result = await authService.authenticateWithFirebase(
+        firebaseToken, 
+        role || 'PATIENT'
+      );
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Firebase authentication error:', error);
+      res.status(401).json({ error: error.message });
+    }
+  }
+
+  // Sync Firebase user data
+  async syncFirebaseUser(req, res) {
+    try {
+      const userId = req.user.userId;
+      const { firebaseToken } = req.body;
+
+      if (!firebaseToken) {
+        return res.status(400).json({ error: 'Firebase token is required' });
+      }
+
+      const result = await authService.syncFirebaseUser(userId, firebaseToken);
+      res.json(result);
+    } catch (error) {
+      console.error('Sync Firebase user error:', error);
       res.status(500).json({ error: error.message });
     }
   }

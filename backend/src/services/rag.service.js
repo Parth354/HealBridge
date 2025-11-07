@@ -1,5 +1,6 @@
 import prisma from '../config/prisma.js';
 import axios from 'axios';
+import firestoreService from './firestore.service.js';
 
 class RAGService {
   constructor() {
@@ -12,35 +13,70 @@ class RAGService {
 
   // Generate patient summary from history
   async generatePatientSummary(patientId) {
-    const patient = await prisma.patient.findUnique({
-      where: { id: patientId },
-      include: {
-        appointments: {
-          where: { status: 'COMPLETED' },
-          include: {
-            prescription: {
-              include: { medications: true }
-            },
-            doctor: true,
-            clinic: true
-          },
-          orderBy: { startTs: 'desc' },
-          take: 10
-        },
-        medications: {
-          orderBy: { startDate: 'desc' },
-          take: 20
-        },
-        documents: {
-          orderBy: { createdAt: 'desc' },
-          take: 10
-        }
-      }
+    // PatientId could be either PostgreSQL patient.id or firebase_uid
+    // First, try to find user with this patientId to get firebase_uid
+    let firebaseUid = patientId;
+    
+    // Try to find if this is a PostgreSQL patient record
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { firebase_uid: patientId },
+          { patient: { id: patientId } }
+        ]
+      },
+      include: { patient: true }
     });
 
-    if (!patient) {
-      throw new Error('Patient not found');
+    if (user && user.firebase_uid) {
+      firebaseUid = user.firebase_uid;
     }
+
+    // Get patient profile from Firestore
+    const patient = await firestoreService.getPatientLegacyFormat(firebaseUid);
+
+    if (!patient) {
+      throw new Error('Patient not found in Firestore');
+    }
+
+    // Get transactional data from PostgreSQL (appointments, medications, documents)
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        patient: {
+          user: { firebase_uid: firebaseUid }
+        },
+        status: 'COMPLETED'
+      },
+      include: {
+        prescription: {
+          include: { medications: true }
+        },
+        doctor: true,
+        clinic: true
+      },
+      orderBy: { startTs: 'desc' },
+      take: 10
+    });
+
+    const medications = await prisma.medication.findMany({
+      where: {
+        patient: {
+          user: { firebase_uid: firebaseUid }
+        }
+      },
+      orderBy: { startDate: 'desc' },
+      take: 20
+    });
+
+    const documents = await prisma.document.findMany({
+      where: {
+        patient: {
+          user: { firebase_uid: firebaseUid }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10
+    });
 
     // Build comprehensive summary
     const summary = {
@@ -52,17 +88,17 @@ class RAGService {
         chronicConditions: patient.chronicConditions || 'None reported'
       },
       visitHistory: {
-        totalVisits: patient.appointments.length,
-        recentVisits: patient.appointments.slice(0, 5).map(apt => ({
+        totalVisits: appointments.length,
+        recentVisits: appointments.slice(0, 5).map(apt => ({
           date: apt.startTs,
           doctor: `Dr. ${apt.doctor.user_id}`,
           clinic: apt.clinic.name,
           hasPrescription: !!apt.prescription
         }))
       },
-      currentMedications: this.getCurrentMedications(patient.medications),
-      medicationHistory: this.getMedicationTimeline(patient.medications),
-      documents: patient.documents.map(doc => ({
+      currentMedications: this.getCurrentMedications(medications),
+      medicationHistory: this.getMedicationTimeline(medications),
+      documents: documents.map(doc => ({
         type: doc.type,
         date: doc.createdAt,
         confidence: doc.ocrConfidence
