@@ -353,6 +353,95 @@ class DoctorController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  // Get doctor profile
+  async getProfile(req, res) {
+    try {
+      const doctorId = req.user.doctorId;
+
+      const doctor = await prisma.doctor.findUnique({
+        where: { id: doctorId },
+        include: {
+          user: {
+            select: {
+              phone: true,
+              email: true,
+              verified: true
+            }
+          },
+          clinics: true
+        }
+      });
+
+      if (!doctor) {
+        return res.status(404).json({ error: 'Doctor profile not found' });
+      }
+
+      res.json({ success: true, doctor });
+    } catch (error) {
+      console.error('Get profile error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Update doctor profile
+  async updateProfile(req, res) {
+    try {
+      const doctorId = req.user.doctorId;
+      const { firstName, lastName, specialties, email } = req.body;
+
+      const updateData = {};
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (lastName !== undefined) updateData.lastName = lastName;
+      if (specialties !== undefined) updateData.specialties = specialties;
+
+      const doctor = await prisma.doctor.update({
+        where: { id: doctorId },
+        data: updateData,
+        include: {
+          user: true
+        }
+      });
+
+      // Update email in user table if provided
+      if (email && email !== doctor.user.email) {
+        await prisma.user.update({
+          where: { id: doctor.user_id },
+          data: { email }
+        });
+      }
+
+      res.json({ success: true, doctor });
+    } catch (error) {
+      console.error('Update profile error:', error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  // Update verification status (for admin/testing)
+  async updateVerificationStatus(req, res) {
+    try {
+      const { doctorId } = req.params;
+      const { status } = req.body;
+
+      if (!['PENDING', 'VERIFIED', 'REJECTED'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+      }
+
+      const doctor = await prisma.doctor.update({
+        where: { id: doctorId },
+        data: { verifiedStatus: status },
+        include: {
+          user: true
+        }
+      });
+
+      res.json({ success: true, doctor, message: `Verification status updated to ${status}` });
+    } catch (error) {
+      console.error('Update verification status error:', error);
+      res.status(400).json({ error: error.message });
+    }
+  }
 }
 
 export default new DoctorController();

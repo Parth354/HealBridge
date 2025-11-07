@@ -34,6 +34,13 @@ router.get('/status', doctorController.getStatus);
 // Emergency (allow without verification for urgent situations)
 router.post('/emergency/leave', validate(schemas.emergencyLeave), doctorController.handleEmergencyLeave);
 
+// Profile management (allow without verification)
+router.get('/profile', doctorController.getProfile);
+router.put('/profile', doctorController.updateProfile);
+
+// Admin route - Update verification status (for testing/admin)
+router.put('/verification/:doctorId/status', doctorController.updateVerificationStatus);
+
 // Routes below require verified doctor (critical operations only)
 router.use(requireVerifiedDoctor);
 

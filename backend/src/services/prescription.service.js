@@ -527,7 +527,7 @@ class PrescriptionService {
           </div>
         </div>
 
-          <div class="patient-info">
+        <div class="patient-info">
           <strong>Patient Information</strong><br>
           Name: ${(appointment.patientData || patient).name || 'Patient'}<br>
           Age: ${(appointment.patientData || patient).dob ? this.calculateAge((appointment.patientData || patient).dob) : 'N/A'} years | Gender: ${(appointment.patientData || patient).gender || 'N/A'}<br>

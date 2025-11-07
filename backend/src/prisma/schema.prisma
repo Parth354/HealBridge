@@ -50,6 +50,8 @@ model Patient {
 model Doctor {
   id             String          @id @default(cuid())
   user_id        String          @unique
+  firstName      String          @default("")
+  lastName       String          @default("")
   specialties    String[]        @default([])
   licenseNo      String          @unique
   verifiedStatus LicenseStatus   @default(PENDING)

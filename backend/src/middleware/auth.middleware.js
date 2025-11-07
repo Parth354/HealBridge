@@ -2,6 +2,23 @@ import { verifyToken } from '../config/auth.js';
 import { verifyFirebaseToken } from '../config/firebase.js';
 import prisma from '../config/prisma.js';
 
+// Helper function to retry database queries (for Render database wake-up)
+const retryDatabaseQuery = async (queryFn, maxRetries = 2, delay = 1000) => {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await queryFn();
+    } catch (error) {
+      // Check if it's a connection error (P1001)
+      if (error.code === 'P1001' && i < maxRetries - 1) {
+        console.log(`⚠️  Database connection failed, retrying (${i + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+};
+
 // Authenticate JWT token or Firebase token
 const authenticate = async (req, res, next) => {
   try {
@@ -21,13 +38,15 @@ const authenticate = async (req, res, next) => {
       try {
         const firebaseDecoded = await verifyFirebaseToken(token);
         
-        // Find user by Firebase UID
-        user = await prisma.user.findUnique({
-          where: { firebase_uid: firebaseDecoded.uid },
-          include: {
-            patient: true,
-            doctor: true
-          }
+        // Find user by Firebase UID with retry logic
+        user = await retryDatabaseQuery(async () => {
+          return await prisma.user.findUnique({
+            where: { firebase_uid: firebaseDecoded.uid },
+            include: {
+              patient: true,
+              doctor: true
+            }
+          });
         });
 
         if (!user) {
@@ -48,14 +67,16 @@ const authenticate = async (req, res, next) => {
       decoded = verifyToken(token);
     }
 
-    // If we got JWT decoded, fetch user by ID
+    // If we got JWT decoded, fetch user by ID with retry logic
     if (decoded && !user) {
-      user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        include: {
-          patient: true,
-          doctor: true
-        }
+      user = await retryDatabaseQuery(async () => {
+        return await prisma.user.findUnique({
+          where: { id: decoded.userId },
+          include: {
+            patient: true,
+            doctor: true
+          }
+        });
       });
 
       if (!user) {
@@ -81,6 +102,17 @@ const authenticate = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Authentication error:', error);
+    
+    // If it's a database connection error, return 503 instead of 401
+    // This prevents frontend from redirecting to login
+    if (error.code === 'P1001') {
+      return res.status(503).json({ 
+        error: 'Database temporarily unavailable',
+        message: 'Please try again in a moment',
+        retryAfter: 5 // Suggest retry after 5 seconds
+      });
+    }
+    
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 };

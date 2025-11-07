@@ -47,15 +47,15 @@ class RAGService {
         },
         status: 'COMPLETED'
       },
-      include: {
-        prescription: {
-          include: { medications: true }
-        },
-        doctor: true,
-        clinic: true
-      },
-      orderBy: { startTs: 'desc' },
-      take: 10
+          include: {
+            prescription: {
+              include: { medications: true }
+            },
+            doctor: true,
+            clinic: true
+          },
+          orderBy: { startTs: 'desc' },
+          take: 10
     });
 
     const medications = await prisma.medication.findMany({
@@ -64,8 +64,8 @@ class RAGService {
           user: { firebase_uid: firebaseUid }
         }
       },
-      orderBy: { startDate: 'desc' },
-      take: 20
+          orderBy: { startDate: 'desc' },
+          take: 20
     });
 
     const documents = await prisma.document.findMany({
@@ -74,8 +74,8 @@ class RAGService {
           user: { firebase_uid: firebaseUid }
         }
       },
-      orderBy: { createdAt: 'desc' },
-      take: 10
+          orderBy: { createdAt: 'desc' },
+          take: 10
     });
 
     // Build comprehensive summary

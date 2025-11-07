@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -14,8 +15,12 @@ import doctorRoutes from './routes/doctor.routes.js';
 // Import config
 import config from './config/env.js';
 
+// Import WebSocket service
+import websocketService from './services/websocket.service.js';
+
 // Initialize app
 const app = express();
+const server = createServer(app);
 
 // Security middleware
 app.use(helmet());
@@ -110,10 +115,13 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Initialize WebSocket
+websocketService.initialize(server);
+
 // Start server
 const PORT = config.PORT || 3000;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════╗
 ║       HealBridge Backend Server       ║
@@ -121,12 +129,20 @@ app.listen(PORT, () => {
 ║  Environment: ${config.NODE_ENV.padEnd(23)} ║
 ║  Port:        ${PORT.toString().padEnd(23)} ║
 ║  Status:      Running ✓               ║
+║  WebSocket:   Enabled ✓               ║
 ╚═══════════════════════════════════════╝
   `);
   console.log(`🏥 Server is running on port ${PORT}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
   console.log(`📱 Patient API: http://localhost:${PORT}/api/patient`);
   console.log(`👨‍⚕️  Doctor API: http://localhost:${PORT}/api/doctor`);
+  console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
+  
+  // Log WebSocket stats every 5 minutes
+  setInterval(() => {
+    const stats = websocketService.getStats();
+    console.log(`\n📊 WebSocket Stats:`, stats);
+  }, 5 * 60 * 1000);
 });
 
 // Graceful shutdown
@@ -140,7 +156,10 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
   process.exit(0);
+  });
 });
 
 export default app;
