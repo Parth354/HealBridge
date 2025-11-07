@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { format, addDays, startOfWeek } from 'date-fns';
+import { useState, useEffect, useMemo } from 'react';
+import { format, addDays, startOfWeek, endOfWeek } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, Pause, Calendar as CalendarIcon, Filter, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useAppointments, useStartConsultation } from '../hooks/useAppointments';
-import { markUnavailable, createSchedule, createRecurringSchedule, getClinics } from '../api/doctorApi';
+import { markUnavailable, createSchedule, createRecurringSchedule, getClinics, getAppointments } from '../api/doctorApi';
 import AppointmentCard from '../components/AppointmentCard';
 import { AppointmentCardSkeleton } from '../components/SkeletonLoader';
 import { APPOINTMENT_STATUS } from '../utils/constants';
@@ -35,6 +36,43 @@ const Schedule = () => {
   );
 
   const startConsultation = useStartConsultation();
+
+  // Fetch appointments for the entire week (for week view)
+  const weekStart = useMemo(() => startOfWeek(selectedDate, { weekStartsOn: 0 }), [selectedDate]);
+  const weekEnd = useMemo(() => endOfWeek(selectedDate, { weekStartsOn: 0 }), [selectedDate]);
+
+  const { data: weekAppointmentsData, isLoading: isLoadingWeek, refetch: refetchWeek } = useQuery({
+    queryKey: ['weekAppointments', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
+    queryFn: async () => {
+      // Fetch appointments for each day of the week
+      const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+      const promises = weekDays.map(day => 
+        getAppointments(format(day, 'yyyy-MM-dd')).catch(() => ({ data: [] }))
+      );
+      
+      const results = await Promise.all(promises);
+      
+      // Group appointments by date
+      const appointmentsByDate = {};
+      results.forEach((result, index) => {
+        const dayKey = format(weekDays[index], 'yyyy-MM-dd');
+        appointmentsByDate[dayKey] = result.data || [];
+      });
+      
+      return appointmentsByDate;
+    },
+    enabled: viewMode === 'week',
+    staleTime: 300000, // 5 minutes
+  });
+
+  // Combined refetch function for both views
+  const handleRefetch = () => {
+    if (viewMode === 'week') {
+      refetchWeek();
+    } else {
+      refetch();
+    }
+  };
 
   // Fetch clinics on mount
   useEffect(() => {
@@ -102,7 +140,7 @@ const Schedule = () => {
       
       await markUnavailable(startTs.toISOString(), endTs.toISOString(), 'HOLIDAY');
       showSuccess('Leave marked successfully');
-      refetch();
+      handleRefetch();
     } catch (error) {
       if (error.message.includes('Unique constraint')) {
         showError('Schedule already exists for this time slot');
@@ -195,7 +233,7 @@ const Schedule = () => {
         recurrence_end_date: ''
       });
       setShowAddSlotModal(false);
-      refetch();
+      handleRefetch();
     } catch (error) {
       if (error.message.includes('Unique constraint')) {
         showError('Schedule already exists for this time slot. Please choose a different time.');
@@ -566,7 +604,19 @@ const Schedule = () => {
             </h2>
             {filteredAppointments?.length > 0 && (
               <div className="text-sm text-gray-600">
-                Estimated time: {(filteredAppointments?.length * 25) || 0} minutes
+                Estimated time: {
+                  (() => {
+                    const totalMinutes = filteredAppointments.reduce((total, apt) => {
+                      const start = new Date(apt.startTs);
+                      const end = new Date(apt.endTs);
+                      const duration = Math.round((end - start) / (1000 * 60)); // Convert ms to minutes
+                      return total + duration;
+                    }, 0);
+                    return totalMinutes > 60 
+                      ? `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`
+                      : `${totalMinutes} minutes`;
+                  })()
+                }
               </div>
             )}
           </div>
@@ -607,32 +657,103 @@ const Schedule = () => {
       ) : (
         /* Week View */
         <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-          <div className="grid grid-cols-7 gap-px bg-gray-200">
-            {getWeekDays().map((day, index) => {
-              const isToday = format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-              return (
-                <div key={index} className="bg-white p-4">
-                  <div className={`text-center mb-3 pb-2 border-b ${isToday ? 'border-blue-600' : 'border-gray-200'}`}>
-                    <div className="text-xs text-gray-500 uppercase">
-                      {format(day, 'EEE')}
-                    </div>
-                    <div className={`text-xl font-bold mt-1 ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
-                      {format(day, 'd')}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    {/* Mock appointments for week view */}
-                    {[1, 2].map((i) => (
-                      <div key={i} className="p-2 bg-blue-50 rounded text-xs">
-                        <div className="font-medium text-gray-900">Patient {i}</div>
-                        <div className="text-gray-600">{9 + i}:00 AM</div>
+          {isLoadingWeek ? (
+            <div className="flex items-center justify-center p-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-7 gap-px bg-gray-200">
+              {getWeekDays().map((day, index) => {
+                const isToday = format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+                const dayKey = format(day, 'yyyy-MM-dd');
+                const dayAppointments = weekAppointmentsData?.[dayKey] || [];
+                
+                // Filter appointments by status if filter is active
+                const filteredDayAppointments = filterStatus === 'all' 
+                  ? dayAppointments 
+                  : dayAppointments.filter(apt => apt.status === filterStatus);
+
+                return (
+                  <div key={index} className="bg-white p-3 min-h-[200px]">
+                    <div className={`text-center mb-3 pb-2 border-b ${isToday ? 'border-blue-600' : 'border-gray-200'}`}>
+                      <div className="text-xs text-gray-500 uppercase font-medium">
+                        {format(day, 'EEE')}
                       </div>
-                    ))}
+                      <div className={`text-2xl font-bold mt-1 ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
+                        {format(day, 'd')}
+                      </div>
+                      {filteredDayAppointments.length > 0 && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          {filteredDayAppointments.length} apt{filteredDayAppointments.length !== 1 ? 's' : ''}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {filteredDayAppointments.length === 0 ? (
+                        <div className="text-center py-6 text-xs text-gray-400">
+                          No appointments
+                        </div>
+                      ) : (
+                        filteredDayAppointments.map((appointment) => {
+                          const startTime = new Date(appointment.startTs);
+                          const statusColors = {
+                            'HOLD': 'bg-yellow-50 border-yellow-200 text-yellow-800',
+                            'CONFIRMED': 'bg-blue-50 border-blue-200 text-blue-800',
+                            'STARTED': 'bg-purple-50 border-purple-200 text-purple-800',
+                            'COMPLETED': 'bg-green-50 border-green-200 text-green-800',
+                            'CANCELLED': 'bg-red-50 border-red-200 text-red-800'
+                          };
+                          
+                          return (
+                            <div 
+                              key={appointment.id} 
+                              className={`p-2 rounded border cursor-pointer hover:shadow-md transition-shadow ${statusColors[appointment.status] || 'bg-gray-50 border-gray-200'}`}
+                              onClick={() => {
+                                // Switch to day view and select this day
+                                setSelectedDate(day);
+                                setViewMode('day');
+                              }}
+                              title="Click to view details"
+                            >
+                              <div className="flex items-start justify-between gap-1">
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold text-xs truncate">
+                                    {appointment.patient?.name || appointment.patient_firebase_uid || 'Patient'}
+                                  </div>
+                                  <div className="text-xs opacity-75 mt-0.5">
+                                    {format(startTime, 'h:mm a')}
+                                  </div>
+                                  {appointment.clinic?.name && (
+                                    <div className="text-xs opacity-60 truncate mt-0.5">
+                                      {appointment.clinic.name}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className={`text-xs px-1.5 py-0.5 rounded font-medium whitespace-nowrap ${
+                                  appointment.status === 'COMPLETED' ? 'bg-green-100' :
+                                  appointment.status === 'STARTED' ? 'bg-purple-100' :
+                                  appointment.status === 'CONFIRMED' ? 'bg-blue-100' :
+                                  appointment.status === 'CANCELLED' ? 'bg-red-100' :
+                                  'bg-yellow-100'
+                                }`}>
+                                  {appointment.status === 'HOLD' ? 'HOLD' :
+                                   appointment.status === 'CONFIRMED' ? 'CONF' :
+                                   appointment.status === 'STARTED' ? 'LIVE' :
+                                   appointment.status === 'COMPLETED' ? 'DONE' :
+                                   appointment.status === 'CANCELLED' ? 'CANC' : appointment.status}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
       </div>
