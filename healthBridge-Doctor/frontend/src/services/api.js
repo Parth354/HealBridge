@@ -12,7 +12,7 @@ import axios from 'axios';
 
 // Create axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+  baseURL: import.meta.env.VITE_SERVER_LINK || 'https://healbridgebackend.onrender.com/api',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'

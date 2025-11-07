@@ -2,8 +2,8 @@
 export const APP_NAME = 'HealBridge Doctor';
 export const APP_VERSION = '1.0.0';
 
-// API Base URL (mock)
-export const API_BASE_URL = 'https://healbridgebackend.onrender.com/api';
+// API Base URL
+export const API_BASE_URL = import.meta.env.VITE_SERVER_LINK ? `${import.meta.env.VITE_SERVER_LINK}/api` : 'https://healbridgebackend.onrender.com/api';
 
 // Routes
 export const ROUTES = {
