@@ -21,6 +21,8 @@ import {
   Star, Filter, RefreshCw, FileText
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import api from '../services/api';
 
 const Analytics = () => {
@@ -49,28 +51,291 @@ const Analytics = () => {
 
   // Export functions
   const exportToCSV = () => {
-    if (!analytics) return;
+    if (!analytics) {
+      alert('No analytics data available to export');
+      return;
+    }
 
     const rows = [
+      ['Analytics Report'],
+      [`Date Range: ${format(dateRange.start, 'MMM dd, yyyy')} - ${format(dateRange.end, 'MMM dd, yyyy')}`],
+      [''],
+      ['=== KEY METRICS ==='],
       ['Metric', 'Value'],
       ['Total Appointments', analytics.appointments?.total || 0],
-      ['Completed', analytics.appointments?.completed || 0],
-      ['Revenue', analytics.revenue?.total || 0],
-      ['Average Rating', analytics.performance?.avgRating || 0]
+      ['Completed Appointments', analytics.appointments?.completed || 0],
+      ['Cancelled Appointments', analytics.appointments?.cancelled || 0],
+      ['Completion Rate', `${analytics.appointments?.completionRate || 0}%`],
+      ['Total Revenue', `₹${(analytics.revenue?.total || 0).toLocaleString()}`],
+      ['Average Revenue per Appointment', `₹${analytics.revenue?.averagePerAppointment || 0}`],
+      ['Average Rating', `${analytics.performance?.avgRating || 0}/5`],
+      [''],
+      ['=== APPOINTMENT TRENDS (Daily) ==='],
+      ['Date', 'Appointments']
     ];
 
+    // Add daily appointment data
+    if (analytics.appointmentsByDay) {
+      Object.entries(analytics.appointmentsByDay).forEach(([date, count]) => {
+        rows.push([format(new Date(date), 'MMM dd, yyyy'), count]);
+      });
+    }
+
+    rows.push(['']);
+    rows.push(['=== REVENUE BY CLINIC ===']);
+    rows.push(['Clinic', 'Revenue (₹)']);
+    
+    // Add revenue by clinic data
+    if (analytics.revenueByClinic) {
+      Object.entries(analytics.revenueByClinic).forEach(([clinic, revenue]) => {
+        rows.push([clinic, revenue.toLocaleString()]);
+      });
+    }
+
+    rows.push(['']);
+    rows.push(['=== VISIT TYPE BREAKDOWN ===']);
+    rows.push(['Type', 'Count']);
+    
+    // Add visit type data
+    if (analytics.byVisitType) {
+      Object.entries(analytics.byVisitType).forEach(([type, count]) => {
+        rows.push([type, count]);
+      });
+    }
+
+    rows.push(['']);
+    rows.push(['=== PEAK HOURS ===']);
+    rows.push(['Hour', 'Appointments']);
+    
+    // Add peak hours data
+    if (analytics.byHour) {
+      analytics.byHour.forEach((count, hour) => {
+        if (count > 0) {
+          rows.push([`${hour}:00`, count]);
+        }
+      });
+    }
+
     const csvContent = rows.map(row => row.join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `analytics-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `analytics-report-${format(new Date(), 'yyyy-MM-dd-HHmm')}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   const exportToPDF = () => {
-    // Would use jsPDF library
-    alert('PDF export feature - integrate jsPDF library');
+    if (!analytics) {
+      alert('No analytics data available to export');
+      return;
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let yPos = 20;
+
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(31, 41, 55); // Gray-800
+    doc.text('Analytics Report', pageWidth / 2, yPos, { align: 'center' });
+    
+    yPos += 10;
+    doc.setFontSize(12);
+    doc.setTextColor(107, 114, 128); // Gray-500
+    doc.text(
+      `Date Range: ${format(dateRange.start, 'MMM dd, yyyy')} - ${format(dateRange.end, 'MMM dd, yyyy')}`,
+      pageWidth / 2,
+      yPos,
+      { align: 'center' }
+    );
+    
+    yPos += 10;
+    doc.setFontSize(10);
+    doc.text(`Generated: ${format(new Date(), 'MMM dd, yyyy HH:mm')}`, pageWidth / 2, yPos, { align: 'center' });
+    
+    yPos += 15;
+
+    // KPI Summary Table
+    doc.setFontSize(14);
+    doc.setTextColor(31, 41, 55);
+    doc.text('Key Performance Indicators', 14, yPos);
+    yPos += 5;
+
+    doc.autoTable({
+      startY: yPos,
+      head: [['Metric', 'Value']],
+      body: [
+        ['Total Appointments', `${analytics.appointments?.total || 0}`],
+        ['Completed Appointments', `${analytics.appointments?.completed || 0}`],
+        ['Cancelled Appointments', `${analytics.appointments?.cancelled || 0}`],
+        ['Completion Rate', `${analytics.appointments?.completionRate || 0}%`],
+        ['Total Revenue', `₹${(analytics.revenue?.total || 0).toLocaleString()}`],
+        ['Avg Revenue/Appointment', `₹${analytics.revenue?.averagePerAppointment || 0}`],
+        ['Average Rating', `${analytics.performance?.avgRating || 0}/5`],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [59, 130, 246], textColor: 255 }, // Blue-600
+      styles: { fontSize: 10 },
+      columnStyles: {
+        0: { cellWidth: 80 },
+        1: { cellWidth: 'auto', halign: 'right' }
+      }
+    });
+
+    yPos = doc.lastAutoTable.finalY + 15;
+
+    // Check if we need a new page
+    if (yPos > pageHeight - 60) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    // Appointment Trends
+    if (analytics.appointmentsByDay && Object.keys(analytics.appointmentsByDay).length > 0) {
+      doc.setFontSize(14);
+      doc.text('Appointment Trends (Daily)', 14, yPos);
+      yPos += 5;
+
+      const trendData = Object.entries(analytics.appointmentsByDay)
+        .map(([date, count]) => [format(new Date(date), 'MMM dd, yyyy'), count])
+        .slice(0, 10); // Limit to 10 most recent days
+
+      doc.autoTable({
+        startY: yPos,
+        head: [['Date', 'Appointments']],
+        body: trendData,
+        theme: 'striped',
+        headStyles: { fillColor: [16, 185, 129] }, // Green-500
+        styles: { fontSize: 9 },
+        columnStyles: {
+          0: { cellWidth: 80 },
+          1: { cellWidth: 'auto', halign: 'right' }
+        }
+      });
+
+      yPos = doc.lastAutoTable.finalY + 15;
+    }
+
+    // Check if we need a new page
+    if (yPos > pageHeight - 60) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    // Revenue by Clinic
+    if (analytics.revenueByClinic && Object.keys(analytics.revenueByClinic).length > 0) {
+      doc.setFontSize(14);
+      doc.text('Revenue by Clinic', 14, yPos);
+      yPos += 5;
+
+      const revenueData = Object.entries(analytics.revenueByClinic)
+        .map(([clinic, revenue]) => [clinic, `₹${revenue.toLocaleString()}`]);
+
+      doc.autoTable({
+        startY: yPos,
+        head: [['Clinic', 'Revenue']],
+        body: revenueData,
+        theme: 'grid',
+        headStyles: { fillColor: [245, 158, 11] }, // Amber-500
+        styles: { fontSize: 9 },
+        columnStyles: {
+          0: { cellWidth: 100 },
+          1: { cellWidth: 'auto', halign: 'right' }
+        }
+      });
+
+      yPos = doc.lastAutoTable.finalY + 15;
+    }
+
+    // Check if we need a new page
+    if (yPos > pageHeight - 60) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    // Visit Type Breakdown
+    if (analytics.byVisitType && Object.keys(analytics.byVisitType).length > 0) {
+      doc.setFontSize(14);
+      doc.text('Visit Type Breakdown', 14, yPos);
+      yPos += 5;
+
+      const visitTypeData = Object.entries(analytics.byVisitType)
+        .map(([type, count]) => [type, count]);
+
+      doc.autoTable({
+        startY: yPos,
+        head: [['Visit Type', 'Count']],
+        body: visitTypeData,
+        theme: 'striped',
+        headStyles: { fillColor: [139, 92, 246] }, // Purple-500
+        styles: { fontSize: 9 },
+        columnStyles: {
+          0: { cellWidth: 100 },
+          1: { cellWidth: 'auto', halign: 'right' }
+        }
+      });
+
+      yPos = doc.lastAutoTable.finalY + 15;
+    }
+
+    // Check if we need a new page
+    if (yPos > pageHeight - 60) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    // Peak Hours
+    if (analytics.byHour) {
+      doc.setFontSize(14);
+      doc.text('Peak Hours', 14, yPos);
+      yPos += 5;
+
+      const peakHoursData = analytics.byHour
+        .map((count, hour) => [`${hour}:00`, count])
+        .filter(([_, count]) => count > 0);
+
+      if (peakHoursData.length > 0) {
+        doc.autoTable({
+          startY: yPos,
+          head: [['Hour', 'Appointments']],
+          body: peakHoursData,
+          theme: 'grid',
+          headStyles: { fillColor: [239, 68, 68] }, // Red-500
+          styles: { fontSize: 9 },
+          columnStyles: {
+            0: { cellWidth: 60 },
+            1: { cellWidth: 'auto', halign: 'right' }
+          }
+        });
+      }
+    }
+
+    // Footer on each page
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(156, 163, 175); // Gray-400
+      doc.text(
+        `Page ${i} of ${pageCount}`,
+        pageWidth / 2,
+        pageHeight - 10,
+        { align: 'center' }
+      );
+      doc.text(
+        'HealBridge Doctor Analytics',
+        14,
+        pageHeight - 10
+      );
+    }
+
+    // Save the PDF
+    doc.save(`analytics-report-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`);
   };
 
   // Prepare chart data
