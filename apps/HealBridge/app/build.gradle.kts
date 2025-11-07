@@ -60,9 +60,11 @@ dependencies {
     implementation(libs.androidx.material3)
 
     implementation(libs.androidx.appcompat)
+
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.cardview)
+
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
 
@@ -89,6 +91,11 @@ dependencies {
     implementation(libs.firebase.appcheck.playintegrity)
 
     implementation(libs.lottie)
+
+    implementation(libs.retrofit)
+    implementation(libs.converter.gson)
+    implementation(libs.logging.interceptor)
+
     implementation(libs.firebase.appcheck.debug)
 
     testImplementation(libs.junit)

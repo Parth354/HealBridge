@@ -39,6 +39,7 @@ class Login : AppCompatActivity() {
             firebaseAuthWithGoogle(account)
         } catch (e: ApiException) {
             binding.loadingIndicator.visibility = View.GONE
+            binding.googleSignInButton.isEnabled = true
             Log.e("GoogleSignIn", "Error code: ${e.statusCode}", e)
 
             val errorMessage = when (e.statusCode) {
@@ -76,6 +77,10 @@ class Login : AppCompatActivity() {
     }
 
     private fun signInWithGoogle() {
+        // Show loading state
+        binding.googleSignInButton.isEnabled = false
+        binding.loadingIndicator.visibility = View.VISIBLE
+        
         // Sign out first to force account selection
         googleSignInClient.signOut().addOnCompleteListener {
             val signInIntent = googleSignInClient.signInIntent

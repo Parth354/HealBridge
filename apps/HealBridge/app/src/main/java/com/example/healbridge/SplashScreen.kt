@@ -7,6 +7,8 @@ import android.os.Looper
 import android.util.Log
 import android.view.animation.AnimationUtils
 import android.widget.ImageView
+import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.firebase.BuildConfig
@@ -43,9 +45,17 @@ class SplashScreen : AppCompatActivity() {
             Log.d("AppCheck", "Using Play Integrity App Check Provider")
         }
 
-        // Animate logo
+        // Animate elements
         logo = findViewById(R.id.imageView)
+        val appNameText = findViewById<TextView>(R.id.appNameText)
+        val taglineText = findViewById<TextView>(R.id.taglineText)
+        val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+        
+        // Start animations
         logo.startAnimation(AnimationUtils.loadAnimation(this, R.anim.scale))
+        appNameText.startAnimation(AnimationUtils.loadAnimation(this, R.anim.fade_in_up))
+        taglineText.startAnimation(AnimationUtils.loadAnimation(this, R.anim.fade_in_delayed))
+        progressBar.startAnimation(AnimationUtils.loadAnimation(this, R.anim.fade_in_delayed))
 
         // Check authentication status
         val auth = FirebaseAuth.getInstance()
