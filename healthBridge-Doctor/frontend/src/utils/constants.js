@@ -17,24 +17,24 @@ export const ROUTES = {
   SETTINGS: '/settings',
 };
 
-// Appointment Status
+// Appointment Status (Backend Enum)
 export const APPOINTMENT_STATUS = {
-  SCHEDULED: 'scheduled',
-  CONFIRMED: 'confirmed',
-  IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
-  CANCELLED: 'cancelled',
-  NO_SHOW: 'no_show',
+  HOLD: 'HOLD',
+  CONFIRMED: 'CONFIRMED',
+  STARTED: 'STARTED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+  RESCHEDULED: 'RESCHEDULED',
 };
 
 // Status Colors
 export const STATUS_COLORS = {
-  [APPOINTMENT_STATUS.SCHEDULED]: 'bg-blue-100 text-blue-800 border-blue-200',
+  [APPOINTMENT_STATUS.HOLD]: 'bg-blue-100 text-blue-800 border-blue-200',
   [APPOINTMENT_STATUS.CONFIRMED]: 'bg-green-100 text-green-800 border-green-200',
-  [APPOINTMENT_STATUS.IN_PROGRESS]: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  [APPOINTMENT_STATUS.STARTED]: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   [APPOINTMENT_STATUS.COMPLETED]: 'bg-gray-100 text-gray-800 border-gray-200',
   [APPOINTMENT_STATUS.CANCELLED]: 'bg-red-100 text-red-800 border-red-200',
-  [APPOINTMENT_STATUS.NO_SHOW]: 'bg-orange-100 text-orange-800 border-orange-200',
+  [APPOINTMENT_STATUS.RESCHEDULED]: 'bg-orange-100 text-orange-800 border-orange-200',
 };
 
 // Toast Types

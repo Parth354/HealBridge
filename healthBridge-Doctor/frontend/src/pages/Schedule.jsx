@@ -64,9 +64,11 @@ const Schedule = () => {
         }
       } else {
         console.warn('No clinics data in response:', response);
+        setClinics([]); // Set empty array as fallback
       }
     } catch (error) {
       console.error('Failed to fetch clinics:', error);
+      setClinics([]); // Set empty array on error
       showError('Failed to load clinics. Please try refreshing the page.');
     }
   };
@@ -102,7 +104,11 @@ const Schedule = () => {
       showSuccess('Leave marked successfully');
       refetch();
     } catch (error) {
-      showError(error.message || 'Failed to mark leave');
+      if (error.message.includes('Unique constraint')) {
+        showError('Schedule already exists for this time slot');
+      } else {
+        showError(error.message || 'Failed to mark leave');
+      }
     }
   };
 
@@ -112,6 +118,21 @@ const Schedule = () => {
     // Validation
     if (!slotForm.clinic_id || !slotForm.date || !slotForm.start_time || !slotForm.end_time) {
       showError('Please fill in all required fields');
+      return;
+    }
+
+    // Validate time range
+    if (slotForm.start_time >= slotForm.end_time) {
+      showError('End time must be after start time');
+      return;
+    }
+
+    // Validate date is not in the past
+    const selectedDate = new Date(slotForm.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selectedDate < today) {
+      showError('Cannot create schedule for past dates');
       return;
     }
 
@@ -154,6 +175,8 @@ const Schedule = () => {
           bufferMinutes: 0,
           type: 'work'
         };
+        
+        console.log('Sending schedule data:', scheduleData);
 
         await createSchedule(scheduleData);
         showSuccess('Schedule slot created successfully!');
@@ -174,7 +197,11 @@ const Schedule = () => {
       setShowAddSlotModal(false);
       refetch();
     } catch (error) {
-      showError(error.message || 'Failed to create schedule slot');
+      if (error.message.includes('Unique constraint')) {
+        showError('Schedule already exists for this time slot. Please choose a different time.');
+      } else {
+        showError(error.message || 'Failed to create schedule slot');
+      }
     } finally {
       setIsAddingSlot(false);
     }
@@ -204,9 +231,9 @@ const Schedule = () => {
 
   const statusFilters = [
     { label: 'All', value: 'all' },
-    { label: 'Booked', value: 'BOOKED' },
+    { label: 'Hold', value: 'HOLD' },
     { label: 'Confirmed', value: 'CONFIRMED' },
-    { label: 'In Progress', value: 'IN_PROGRESS' },
+    { label: 'Started', value: 'STARTED' },
     { label: 'Completed', value: 'COMPLETED' },
     { label: 'Cancelled', value: 'CANCELLED' },
   ];

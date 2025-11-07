@@ -86,9 +86,10 @@ const Verify = () => {
         if (result.needsProfile) {
           showInfo('Please complete your profile');
           setTimeout(() => {
-            navigate('/settings'); // Or a dedicated profile completion page
+            navigate('/profile-setup');
           }, 1500);
         } else {
+          // User already has profile, go to dashboard
           setTimeout(() => {
             navigate('/dashboard');
           }, 1500);

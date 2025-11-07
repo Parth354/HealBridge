@@ -145,8 +145,12 @@ const Dashboard = () => {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                  <p className="text-sm text-green-600 mt-2">{stat.trend} from last week</p>
+                  {statsLoading ? (
+                    <div className="h-8 bg-gray-200 rounded animate-pulse mb-2"></div>
+                  ) : (
+                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  )}
+                  <p className="text-sm text-gray-500 mt-2">{stat.trend}</p>
                 </div>
                 <div className={`${stat.color} p-3 rounded-lg`}>
                   <Icon className="w-6 h-6" />
@@ -201,7 +205,15 @@ const Dashboard = () => {
         {isLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <AppointmentCardSkeleton key={i} />
+              <div key={i} className="bg-white rounded-lg shadow border border-gray-200 p-4 animate-pulse">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         ) : appointmentsData?.data?.length > 0 ? (
@@ -211,18 +223,26 @@ const Dashboard = () => {
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-12 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-              <Calendar className="w-8 h-8 text-gray-400" />
+          <div className="bg-white rounded-lg shadow border border-gray-200 p-8 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-full mb-4">
+              <Calendar className="w-8 h-8 text-blue-400" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No appointments today</h3>
-            <p className="text-gray-600 mb-4">You don't have any appointments scheduled for today.</p>
-            <button
-              onClick={() => navigate('/schedule')}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-            >
-              View Schedule
-            </button>
+            <p className="text-gray-600 mb-6">Your schedule is clear for today.</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => navigate('/schedule')}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                Add Time Slots
+              </button>
+              <button
+                onClick={() => navigate('/schedule')}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                View Schedule
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -9,7 +9,8 @@ import {
   ChevronRight,
   Filter,
   Download,
-  UserPlus
+  UserPlus,
+  AlertCircle
 } from 'lucide-react';
 import { getAppointments } from '../api/doctorApi';
 import { useToast } from '../context/ToastContext';
@@ -22,11 +23,15 @@ const Patients = () => {
   const [patients, setPatients] = useState([]);
   const [filteredPatients, setFilteredPatients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all'); // all, recent, frequent
 
   useEffect(() => {
-    fetchPatients();
+    // Only fetch once on mount
+    if (patients.length === 0) {
+      fetchPatients();
+    }
   }, []);
 
   useEffect(() => {
@@ -45,11 +50,11 @@ const Patients = () => {
         const patientMap = new Map();
         
         response.data.forEach(appointment => {
-          const patientId = appointment.patient_id || appointment.patientId;
-          const patientName = appointment.patient_name || appointment.patientName || 'Unknown Patient';
-          const patientPhone = appointment.patient_phone || appointment.patientPhone || 'N/A';
-          const patientAge = appointment.patient_age || appointment.patientAge;
-          const patientGender = appointment.patient_gender || appointment.patientGender;
+          const patientId = appointment.patient_id;
+          const patientName = appointment.patient?.name || `Patient ${patientId}`;
+          const patientPhone = appointment.patient?.phone || 'N/A';
+          const patientAge = appointment.patient?.age;
+          const patientGender = appointment.patient?.gender;
           
           if (!patientMap.has(patientId)) {
             patientMap.set(patientId, {
@@ -71,7 +76,7 @@ const Patients = () => {
           patient.totalVisits = patient.appointments.length;
           
           // Find last and next appointments
-          const appointmentDate = new Date(appointment.scheduled_time || appointment.scheduledTime);
+          const appointmentDate = new Date(appointment.startTs);
           const now = new Date();
           
           if (appointmentDate < now) {
@@ -95,6 +100,7 @@ const Patients = () => {
         setPatients(patientsArray);
       }
     } catch (error) {
+      setError(error.message || 'Failed to load patients');
       showError('Failed to load patients');
       console.error('Fetch patients error:', error);
     } finally {
@@ -177,7 +183,10 @@ const Patients = () => {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={fetchPatients}
+            onClick={() => {
+              setPatients([]);
+              fetchPatients();
+            }}
             className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
@@ -234,7 +243,23 @@ const Patients = () => {
       </div>
 
       {/* Patients List */}
-      {isLoading ? (
+      {error ? (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-red-900 mb-2">Failed to Load Patients</h3>
+          <p className="text-red-700 mb-4">{error}</p>
+          <button
+            onClick={() => {
+              setError(null);
+              setPatients([]);
+              fetchPatients();
+            }}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      ) : isLoading ? (
         <div className="space-y-4">
           {[1, 2, 3, 4, 5].map((i) => (
             <SkeletonLoader key={i} variant="card" className="h-32" />

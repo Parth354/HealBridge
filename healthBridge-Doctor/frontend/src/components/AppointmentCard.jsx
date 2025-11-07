@@ -31,10 +31,10 @@ const AppointmentCard = ({ appointment, onAction }) => {
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-gray-900 truncate">
-              {appointment.patientName}
+              {appointment.patient?.name || 'Patient'}
             </h3>
             <p className="text-sm text-gray-600">
-              {appointment.age} years • {appointment.gender}
+              ID: {appointment.patient_id || 'N/A'}
             </p>
           </div>
         </div>
@@ -52,42 +52,31 @@ const AppointmentCard = ({ appointment, onAction }) => {
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Clock className="w-4 h-4 text-gray-400" />
           <span>
-            {format(new Date(appointment.scheduledTime), 'hh:mm a')} • {appointment.duration} mins
+            {format(new Date(appointment.startTs), 'hh:mm a')} - {format(new Date(appointment.endTs), 'hh:mm a')}
           </span>
         </div>
         
-        {appointment.phone && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Phone className="w-4 h-4 text-gray-400" />
-            <span>{appointment.phone}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <MapPin className="w-4 h-4 text-gray-400" />
+          <span>{appointment.visitType || 'CLINIC'} Visit</span>
+        </div>
 
-        {appointment.type === 'video' && (
+        {appointment.visitType === 'TELE' && (
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Video className="w-4 h-4 text-gray-400" />
-            <span>Video Consultation</span>
+            <span>Telemedicine</span>
           </div>
         )}
 
-        {appointment.type === 'in-person' && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <MapPin className="w-4 h-4 text-gray-400" />
-            <span>In-person Visit</span>
-          </div>
-        )}
-
-        {appointment.chiefComplaint && (
-          <div className="flex items-start gap-2 text-sm text-gray-600">
-            <MessageSquare className="w-4 h-4 text-gray-400 mt-0.5" />
-            <span className="flex-1">{appointment.chiefComplaint}</span>
-          </div>
-        )}
+        <div className="flex items-start gap-2 text-sm text-gray-600">
+          <MessageSquare className="w-4 h-4 text-gray-400 mt-0.5" />
+          <span className="flex-1">Fee: ₹{appointment.feeMock || 500}</span>
+        </div>
       </div>
 
       {/* Actions */}
       <div className="flex gap-2 pt-3 border-t border-gray-100">
-        {appointment.status === APPOINTMENT_STATUS.CONFIRMED && (
+        {appointment.status === 'CONFIRMED' && (
           <button
             onClick={handleStartConsult}
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
@@ -96,7 +85,7 @@ const AppointmentCard = ({ appointment, onAction }) => {
           </button>
         )}
         
-        {appointment.status === APPOINTMENT_STATUS.IN_PROGRESS && (
+        {appointment.status === 'STARTED' && (
           <button
             onClick={handleStartConsult}
             className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
@@ -105,7 +94,7 @@ const AppointmentCard = ({ appointment, onAction }) => {
           </button>
         )}
 
-        {appointment.status === APPOINTMENT_STATUS.SCHEDULED && (
+        {appointment.status === 'HOLD' && (
           <button
             onClick={() => onAction?.('confirm', appointment.id)}
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
@@ -121,8 +110,8 @@ const AppointmentCard = ({ appointment, onAction }) => {
           View Details
         </button>
 
-        {(appointment.status === APPOINTMENT_STATUS.SCHEDULED || 
-          appointment.status === APPOINTMENT_STATUS.CONFIRMED) && (
+        {(appointment.status === 'HOLD' || 
+          appointment.status === 'CONFIRMED') && (
           <button
             onClick={() => onAction?.('cancel', appointment.id)}
             className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-colors"
@@ -133,10 +122,10 @@ const AppointmentCard = ({ appointment, onAction }) => {
       </div>
 
       {/* Wait Time Indicator */}
-      {appointment.estimatedWaitTime && appointment.status === APPOINTMENT_STATUS.CONFIRMED && (
+      {appointment.status === 'CONFIRMED' && (
         <div className="mt-3 pt-3 border-t border-gray-100">
           <div className="text-xs text-gray-500">
-            Estimated wait: <span className="font-medium text-gray-700">{appointment.estimatedWaitTime} mins</span>
+            Status: <span className="font-medium text-gray-700">Ready for consultation</span>
           </div>
         </div>
       )}

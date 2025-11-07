@@ -59,10 +59,16 @@ export const AuthProvider = ({ children }) => {
 
   // Transform backend user data to frontend format
   const transformBackendUser = (backendUser) => {
+    const hasDoctor = !!backendUser.doctor;
+    const doctorName = backendUser.doctor?.name || `Dr. ${backendUser.phone || 'User'}`;
+    const specialties = Array.isArray(backendUser.doctor?.specialties) 
+      ? backendUser.doctor.specialties.join(', ') 
+      : backendUser.doctor?.specialties || 'General Medicine';
+    
     return {
       id: backendUser.id,
-      name: backendUser.doctor?.name || 'Dr. User',
-      specialization: backendUser.doctor?.specialties || 'General Practice',
+      name: doctorName,
+      specialization: specialties,
       email: backendUser.email || '',
       phone: backendUser.phone,
       clinics: backendUser.doctor?.clinics?.map(clinic => ({
@@ -74,11 +80,12 @@ export const AuthProvider = ({ children }) => {
         id: backendUser.doctor.clinics[0].id,
         name: backendUser.doctor.clinics[0].name
       } : null,
-      registrationNumber: backendUser.doctor?.licenseNo || 'N/A',
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(backendUser.doctor?.name || 'Doctor')}&background=2563eb&color=fff`,
+      registrationNumber: backendUser.doctor?.licenseNo || 'Pending',
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(doctorName)}&background=2563eb&color=fff`,
       role: backendUser.role,
       verified: backendUser.verified,
-      hasProfile: backendUser.hasProfile
+      hasProfile: hasDoctor,
+      doctorId: backendUser.doctor?.id
     };
   };
 
@@ -119,8 +126,12 @@ export const AuthProvider = ({ children }) => {
         setAuthToken(response.token);
         sessionStorage.setItem('authToken', response.token);
         
+        // Check if user has doctor profile
+        let finalUser = response.user;
+        let needsProfile = !response.user.hasProfile;
+        
         // Transform and store user
-        const transformedUser = transformBackendUser(response.user);
+        const transformedUser = transformBackendUser(finalUser);
         setUser(transformedUser);
         setIsAuthenticated(true);
         sessionStorage.setItem('doctor', JSON.stringify(transformedUser));
@@ -128,7 +139,7 @@ export const AuthProvider = ({ children }) => {
         // Clear pending auth
         setPendingAuth(null);
         
-        return { success: true, user: transformedUser, needsProfile: !response.user.hasProfile };
+        return { success: true, user: transformedUser, needsProfile };
       }
       
       return { success: false, error: 'Verification failed' };

@@ -42,7 +42,7 @@ export const verifyOTP = async (identifier, otp, role = 'DOCTOR') => {
       user: response.user,
     };
   } catch (error) {
-    throw new Error(error.response?.data?.error || 'Invalid OTP');
+    throw new Error(error.error || error.message || 'Invalid OTP');
   }
 };
 
@@ -59,7 +59,7 @@ export const getCurrentUser = async (token) => {
       user: response.user,
     };
   } catch (error) {
-    throw new Error(error.response?.data?.error || 'Failed to get user');
+    throw new Error(error.error || error.message || 'Failed to get user');
   }
 };
 
@@ -76,7 +76,7 @@ export const createDoctorProfile = async (token, profileData) => {
       doctor: response.doctor,
     };
   } catch (error) {
-    throw new Error(error.response?.data?.error || 'Failed to create doctor profile');
+    throw new Error(error.error || error.message || 'Failed to create doctor profile');
   }
 };
 

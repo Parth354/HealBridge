@@ -41,6 +41,9 @@ apiClient.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response;
       
+      // Log detailed error info
+      console.error(`API Error ${status}:`, data);
+      
       switch (status) {
         case 401:
           // Unauthorized - redirect to login
@@ -49,22 +52,21 @@ apiClient.interceptors.response.use(
           window.location.href = '/login';
           break;
         case 403:
-          // Forbidden
-          console.error('Access forbidden');
+          console.error('Access forbidden:', data?.error || data?.message);
           break;
         case 404:
-          // Not found
-          console.error('Resource not found');
+          console.error('Resource not found:', data?.error || data?.message);
           break;
         case 500:
-          // Server error
-          console.error('Server error');
+          console.error('Server error:', data?.error || data?.message);
           break;
         default:
-          console.error('API Error:', data?.message || 'Unknown error');
+          console.error('API Error:', data?.error || data?.message || 'Unknown error');
       }
       
-      return Promise.reject(data || error);
+      // Return detailed error
+      const errorMessage = data?.error || data?.message || `HTTP ${status} Error`;
+      return Promise.reject({ message: errorMessage, status, data });
     } else if (error.request) {
       // Network error
       console.error('Network error - please check your connection');

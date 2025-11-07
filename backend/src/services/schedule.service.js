@@ -21,6 +21,20 @@ class ScheduleService {
       throw new Error('Start time must be before end time');
     }
 
+    // Check for exact duplicate first
+    const exactDuplicate = await prisma.scheduleBlock.findFirst({
+      where: {
+        doctor_id: doctorId,
+        clinic_id: clinicId,
+        startTs: start,
+        endTs: end
+      }
+    });
+
+    if (exactDuplicate) {
+      throw new Error('Schedule already exists for this exact time slot');
+    }
+
     // Check for conflicts
     const conflicts = await prisma.scheduleBlock.findMany({
       where: {
@@ -114,7 +128,10 @@ class ScheduleService {
           });
           scheduleBlocks.push(block);
         } catch (error) {
-          console.error(`Failed to create block for ${currentDate}:`, error.message);
+          // Skip if already exists, log other errors
+          if (!error.message.includes('already exists')) {
+            console.error(`Failed to create block for ${currentDate}:`, error.message);
+          }
         }
       }
 
@@ -130,12 +147,31 @@ class ScheduleService {
 
   // Mark doctor as unavailable (break/holiday)
   async markUnavailable(doctorId, startTs, endTs, type = 'break') {
+    const start = new Date(startTs);
+    const end = new Date(endTs);
+    const clinic = await this.getDoctorDefaultClinic(doctorId);
+
+    // Check if exact same schedule block already exists
+    const existing = await prisma.scheduleBlock.findFirst({
+      where: {
+        doctor_id: doctorId,
+        clinic_id: clinic.id,
+        startTs: start,
+        endTs: end,
+        type
+      }
+    });
+
+    if (existing) {
+      throw new Error('Schedule block already exists for this time period');
+    }
+
     return await prisma.scheduleBlock.create({
       data: {
         doctor_id: doctorId,
-        clinic_id: (await this.getDoctorDefaultClinic(doctorId)).id,
-        startTs: new Date(startTs),
-        endTs: new Date(endTs),
+        clinic_id: clinic.id,
+        startTs: start,
+        endTs: end,
         slotMinutes: 0,
         bufferMinutes: 0,
         type // 'break' or 'holiday'

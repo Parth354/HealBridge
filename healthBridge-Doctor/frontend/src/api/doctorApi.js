@@ -13,7 +13,8 @@ export const createSchedule = async (scheduleData) => {
     const response = await apiClient.post('/doctor/schedule', scheduleData);
     return { success: true, data: response.schedule };
   } catch (error) {
-    throw new Error(error.response?.data?.error || 'Failed to create schedule');
+    console.error('Create schedule error:', error);
+    throw new Error(error.message || 'Failed to create schedule');
   }
 };
 
@@ -61,13 +62,16 @@ export const getAppointments = async (date) => {
     const response = await apiClient.get('/doctor/appointments', {
       params: { date }
     });
+    
+    const appointments = response.appointments || [];
     return {
       success: true,
-      data: response.appointments,
-      count: response.count
+      data: Array.isArray(appointments) ? appointments : [],
+      count: response.count || appointments.length || 0
     };
   } catch (error) {
-    throw new Error(error.response?.data?.error || 'Failed to get appointments');
+    console.error('Get appointments error:', error);
+    throw new Error(error.message || 'Failed to get appointments');
   }
 };
 
@@ -181,9 +185,11 @@ export const getStatistics = async (startDate, endDate) => {
     const response = await apiClient.get('/doctor/statistics', {
       params: { startDate, endDate }
     });
+    console.log('Statistics response:', response);
     return { success: true, data: response };
   } catch (error) {
-    throw new Error(error.response?.data?.error || 'Failed to get statistics');
+    console.error('Statistics error:', error);
+    throw new Error(error.message || 'Failed to get statistics');
   }
 };
 
@@ -194,9 +200,11 @@ export const getAnalytics = getStatistics;
 export const getDoctorStatus = async () => {
   try {
     const response = await apiClient.get('/doctor/status');
+    console.log('Status response:', response);
     return { success: true, data: response };
   } catch (error) {
-    throw new Error(error.response?.data?.error || 'Failed to get doctor status');
+    console.error('Status error:', error);
+    throw new Error(error.message || 'Failed to get doctor status');
   }
 };
 
@@ -216,6 +224,8 @@ export const addClinic = async (clinicData) => {
 export const getClinics = async () => {
   try {
     const response = await apiClient.get('/doctor/clinics');
+    console.log('Raw clinics response:', response);
+    
     // Backend returns { clinics: [...] } or might return array directly
     const clinicsData = response.clinics || response.data || response;
     return {
@@ -225,7 +235,7 @@ export const getClinics = async () => {
     };
   } catch (error) {
     console.error('Get clinics error:', error);
-    throw new Error(error.response?.data?.error || 'Failed to get clinics');
+    throw new Error(error.message || 'Failed to get clinics');
   }
 };
 

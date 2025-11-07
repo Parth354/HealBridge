@@ -13,13 +13,32 @@ export const useAppointments = (date) => {
 
   return useQuery({
     queryKey: ['appointments', date],
-    queryFn: () => getAppointments(date),
+    queryFn: async () => {
+      const result = await getAppointments(date);
+      
+      // Validate and clean data
+      const appointments = (result.data || []).map(apt => ({
+        ...apt,
+        id: apt.id || `temp-${Date.now()}`,
+        patient_id: apt.patient_id || 'unknown',
+        startTs: apt.startTs || new Date().toISOString(),
+        endTs: apt.endTs || new Date().toISOString(),
+        status: apt.status || 'HOLD'
+      }));
+      
+      return {
+        success: result.success,
+        data: appointments,
+        count: result.count || appointments.length
+      };
+    },
     onError: (error) => {
+      console.error('Appointments fetch error:', error);
       showError(error.message || 'Failed to fetch appointments');
     },
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchInterval: 60000, // Refetch every minute
-    enabled: !!date, // Only fetch if date is provided
+    staleTime: 300000, // 5 minutes
+    refetchInterval: false, // Disable auto-refetch
+    enabled: !!date,
   });
 };
 

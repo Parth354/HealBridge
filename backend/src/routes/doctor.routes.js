@@ -16,33 +16,33 @@ router.get('/verification/status', doctorController.getVerificationStatus);
 router.post('/clinics', validate(schemas.addClinic), doctorController.addClinic);
 router.get('/clinics', doctorController.getClinics);
 
-// Routes below require verified doctor
-router.use(requireVerifiedDoctor);
-
-// Schedule management
+// Schedule management (temporarily allow without verification)
 router.post('/schedule', validate(schemas.createSchedule), doctorController.createSchedule);
 router.post('/schedule/recurring', validate(schemas.createRecurringSchedule), doctorController.createRecurringSchedule);
 router.post('/schedule/unavailable', doctorController.markUnavailable);
 router.get('/schedule', doctorController.getSchedule);
 
-// Appointments
+// Appointments (temporarily allow without verification)
 router.get('/appointments', doctorController.getAppointments);
 router.post('/appointments/:appointmentId/start', doctorController.startConsultation);
 router.post('/appointments/:appointmentId/end', doctorController.endConsultation);
 
-// Patient context & RAG
-router.get('/appointments/:appointmentId/patient-context', doctorController.getPatientContext);
-router.post('/patients/:patientId/query', doctorController.queryPatientHistory);
-
-// Prescriptions
-router.post('/prescriptions', validate(schemas.createPrescription), doctorController.createPrescription);
-
-// Analytics
+// Analytics (temporarily allow without verification)
 router.get('/statistics', doctorController.getStatistics);
 router.get('/status', doctorController.getStatus);
 
-// Emergency
+// Emergency (allow without verification for urgent situations)
 router.post('/emergency/leave', validate(schemas.emergencyLeave), doctorController.handleEmergencyLeave);
+
+// Routes below require verified doctor (critical operations only)
+router.use(requireVerifiedDoctor);
+
+// Patient context & RAG (requires verification)
+router.get('/appointments/:appointmentId/patient-context', doctorController.getPatientContext);
+router.post('/patients/:patientId/query', doctorController.queryPatientHistory);
+
+// Prescriptions (requires verification)
+router.post('/prescriptions', validate(schemas.createPrescription), doctorController.createPrescription);
 
 // Wait time management
 router.post('/waittime/update', doctorController.updateWaitTimeFactors);

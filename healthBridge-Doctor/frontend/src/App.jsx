@@ -5,6 +5,7 @@ import { ToastProvider } from './context/ToastContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 
+
 // Pages
 import Login from './pages/Login';
 import Verify from './pages/Verify';
@@ -15,6 +16,7 @@ import Consult from './pages/Consult';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import Patients from './pages/Patients';
+import DoctorProfileSetup from './pages/DoctorProfileSetup';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -22,13 +24,15 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      staleTime: 300000, // 5 minutes
+      cacheTime: 600000, // 10 minutes
     },
   },
 });
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -43,6 +47,11 @@ const ProtectedRoute = ({ children }) => {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Redirect to profile setup if no doctor profile
+  if (!user?.hasProfile) {
+    return <Navigate to="/profile-setup" replace />;
   }
 
   return children;
@@ -83,6 +92,10 @@ function App() {
                       <Verify />
                     </PublicRoute>
                   }
+                />
+                <Route
+                  path="/profile-setup"
+                  element={<DoctorProfileSetup />}
                 />
 
                 {/* Protected Routes */}
