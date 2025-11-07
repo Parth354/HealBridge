@@ -55,9 +55,21 @@ class DoctorService {
     // Calculate distance and filter by location if provided
     let results = doctors.map(doctor => {
       const clinicsWithDistance = doctor.clinics.map(clinic => {
-        const distance = lat && lon ? geoUtils.haversineDistance(lat, lon, clinic.lat, clinic.lon) : null;
+        let distance = null;
+        if (lat && lon && clinic.lat && clinic.lon) {
+          try {
+            distance = geoUtils.haversineDistance(lat, lon, clinic.lat, clinic.lon);
+          } catch (error) {
+            console.error('Distance calculation error:', error);
+            distance = null;
+          }
+        }
         return { ...clinic, distance };
-      }).filter(clinic => !distance || clinic.distance <= maxDistance);
+      }).filter(clinic => {
+        if (!lat || !lon) return true;
+        if (clinic.distance === null) return true;
+        return clinic.distance <= maxDistance;
+      });
 
       if (clinicsWithDistance.length === 0) return null;
 
@@ -79,7 +91,11 @@ class DoctorService {
 
     // Sort results
     if (sortBy === 'distance' && lat && lon) {
-      results.sort((a, b) => a.nearestClinic.distance - b.nearestClinic.distance);
+      results.sort((a, b) => {
+        const distA = a.nearestClinic?.distance || 999;
+        const distB = b.nearestClinic?.distance || 999;
+        return distA - distB;
+      });
     } else if (sortBy === 'next_available') {
       results.sort((a, b) => {
         if (!a.nextAvailable) return 1;

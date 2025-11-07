@@ -116,8 +116,8 @@ app.get('/api/test/db', async (req, res) => {
   }
 });
 
-// API Routes (auth routes disabled for public access)
-// app.use('/api/auth', authRoutes);
+// API Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/patient', patientRoutes);
 app.use('/api/doctor', doctorRoutes);
 
