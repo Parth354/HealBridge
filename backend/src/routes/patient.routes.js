@@ -1,20 +1,12 @@
 import express from 'express';
 const router = express.Router();
 import patientController from '../controllers/patient.controller.js';
-import { authenticate, requirePatientProfile } from '../middleware/auth.middleware.js';
+import { authenticate, requirePatientProfile } from '../middleware/no-auth.middleware.js';
 import { validate, schemas } from '../middleware/validation.middleware.js';
 import upload from '../middleware/upload.middleware.js';
 
-// All routes require authentication
+// Public access - no authentication required
 router.use(authenticate);
-
-// Add role check for patient routes
-router.use((req, res, next) => {
-  if (req.user.role !== 'PATIENT') {
-    return res.status(403).json({ error: 'Patient access required' });
-  }
-  next();
-});
 
 // Test authentication (no profile required)
 router.get('/test/auth', (req, res) => {

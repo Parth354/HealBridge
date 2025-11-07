@@ -81,26 +81,13 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Test authentication endpoint
+// Public access test endpoint
 app.get('/api/test/auth', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ error: 'No token provided' });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    console.log('Test auth - Token length:', token.length);
-    console.log('Test auth - Token preview:', token.substring(0, 50) + '...');
-    
-    res.json({
-      message: 'Token received',
-      tokenLength: token.length,
-      tokenPreview: token.substring(0, 50) + '...'
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  res.json({
+    message: 'Public access enabled - no authentication required',
+    timestamp: new Date().toISOString(),
+    publicAccess: true
+  });
 });
 
 // Test database connectivity
@@ -129,8 +116,8 @@ app.get('/api/test/db', async (req, res) => {
   }
 });
 
-// API Routes
-app.use('/api/auth', authRoutes);
+// API Routes (auth routes disabled for public access)
+// app.use('/api/auth', authRoutes);
 app.use('/api/patient', patientRoutes);
 app.use('/api/doctor', doctorRoutes);
 

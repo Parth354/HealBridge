@@ -18,7 +18,7 @@ object ApiClient {
     }
     
     private val okHttpClient = OkHttpClient.Builder()
-        .addInterceptor(TokenInterceptor())
+        // .addInterceptor(TokenInterceptor()) // Removed for public access
         .addInterceptor(loggingInterceptor)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
