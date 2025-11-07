@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">HealBridge</string>
+    <string name="sign_in_with_google">Sign in with Google</string>
+    <string name="use_your_google_account_to_login">Use your Google Account to Login</string>
+</resources>
