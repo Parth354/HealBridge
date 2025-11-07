@@ -54,26 +54,36 @@ class ProfileFragment : Fragment() {
     }
     
     private fun loadUserProfile() {
-        val uid = getUserId(requireContext())
+        val uid = getUserId(requireContext()) ?: auth.currentUser?.uid
         if (uid != null) {
+            binding.tvName.text = "Loading..."
+            binding.tvPhone.text = "Loading..."
+            
             firestore.collection("users").document(uid).get()
                 .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        val firstName = document.getString("firstName") ?: ""
-                        val lastName = document.getString("lastName") ?: ""
-                        val fullName = "$firstName $lastName".trim()
-                        
-                        binding.tvName.text = if (fullName.isNotEmpty()) fullName else "Name not set"
-                        binding.tvPhone.text = document.getString("phoneNumber") ?: "Phone not set"
-                    } else {
-                        binding.tvName.text = "Complete your profile"
-                        binding.tvPhone.text = "Add your details"
+                    if (_binding != null) {
+                        if (document.exists()) {
+                            val firstName = document.getString("firstName") ?: ""
+                            val lastName = document.getString("lastName") ?: ""
+                            val fullName = "$firstName $lastName".trim()
+                            
+                            binding.tvName.text = if (fullName.isNotEmpty()) fullName else "Complete your profile"
+                            binding.tvPhone.text = document.getString("phoneNumber") ?: "Add phone number"
+                        } else {
+                            binding.tvName.text = "Complete your profile"
+                            binding.tvPhone.text = "Add your details"
+                        }
                     }
                 }
                 .addOnFailureListener {
-                    binding.tvName.text = "Error loading profile"
-                    binding.tvPhone.text = "Please try again"
+                    if (_binding != null) {
+                        binding.tvName.text = "Complete your profile"
+                        binding.tvPhone.text = "Tap to add details"
+                    }
                 }
+        } else {
+            binding.tvName.text = "Not logged in"
+            binding.tvPhone.text = "Please login again"
         }
     }
     

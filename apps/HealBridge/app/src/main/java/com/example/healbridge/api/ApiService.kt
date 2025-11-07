@@ -6,68 +6,72 @@ import retrofit2.http.*
 
 interface ApiService {
     
-    // Doctor endpoints
-    @GET("api/doctors/search")
+    // Doctor Search
+    @GET("api/patient/doctors/search")
     suspend fun searchDoctors(
         @Query("specialty") specialty: String? = null,
-        @Query("location") location: String? = null,
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 10
+        @Query("lat") lat: Double? = null,
+        @Query("lon") lon: Double? = null,
+        @Query("visitType") visitType: String? = null,
+        @Query("sortBy") sortBy: String? = "distance",
+        @Query("maxDistance") maxDistance: Int? = 50,
+        @Query("minRating") minRating: Double? = 0.0,
+        @Query("limit") limit: Int = 20
     ): Response<DoctorSearchResponse>
     
-    @GET("api/doctors/{id}")
-    suspend fun getDoctorById(@Path("id") doctorId: String): Response<Doctor>
-    
-    @GET("api/doctors/{id}/slots")
-    suspend fun getDoctorSlots(
-        @Path("id") doctorId: String,
+    // Doctor Availability
+    @GET("api/patient/doctors/{doctorId}/clinics/{clinicId}/availability")
+    suspend fun getDoctorAvailability(
+        @Path("doctorId") doctorId: String,
+        @Path("clinicId") clinicId: String,
         @Query("date") date: String
-    ): Response<List<TimeSlot>>
+    ): Response<AvailabilityResponse>
     
-    // Appointment endpoints
-    @POST("api/appointments")
-    suspend fun bookAppointment(@Body request: BookingRequest): Response<Appointment>
+    // Slot Hold (Step 1: Reserve slot for 2 minutes)
+    @POST("api/patient/bookings/hold")
+    suspend fun createSlotHold(@Body request: SlotHoldRequest): Response<SlotHoldResponse>
     
-    @GET("api/appointments")
-    suspend fun getAppointments(): Response<List<Appointment>>
+    // Confirm Appointment (Step 2: Convert hold to confirmed appointment)
+    @POST("api/patient/bookings/confirm")
+    suspend fun confirmAppointment(@Body request: ConfirmAppointmentRequest): Response<AppointmentResponse>
     
-    @GET("api/appointments/{id}")
-    suspend fun getAppointmentById(@Path("id") appointmentId: String): Response<Appointment>
+    // Get Appointments
+    @GET("api/patient/appointments")
+    suspend fun getAppointments(
+        @Query("status") status: String? = null
+    ): Response<AppointmentsResponse>
     
-    @PUT("api/appointments/{id}/reschedule")
-    suspend fun rescheduleAppointment(
-        @Path("id") appointmentId: String,
-        @Body request: RescheduleRequest
-    ): Response<Appointment>
+    // Check-in
+    @POST("api/patient/appointments/{appointmentId}/checkin")
+    suspend fun checkIn(@Path("appointmentId") appointmentId: String): Response<AppointmentResponse>
     
-    @DELETE("api/appointments/{id}")
-    suspend fun cancelAppointment(@Path("id") appointmentId: String): Response<Unit>
+    // Cancel Appointment
+    @DELETE("api/patient/appointments/{appointmentId}")
+    suspend fun cancelAppointment(@Path("appointmentId") appointmentId: String): Response<AppointmentResponse>
     
-    // Patient endpoints
-    @GET("api/patients/profile")
-    suspend fun getPatientProfile(): Response<Patient>
+    // Wait Time
+    @GET("api/patient/appointments/{appointmentId}/waittime")
+    suspend fun getWaitTime(@Path("appointmentId") appointmentId: String): Response<WaitTimeResponse>
     
-    @PUT("api/patients/profile")
-    suspend fun updatePatientProfile(@Body patient: Patient): Response<Patient>
+    // Patient Profile
+    @GET("api/patient/profile")
+    suspend fun getPatientProfile(): Response<ProfileResponse>
     
-    // Prescription endpoints
-    @GET("api/prescriptions")
-    suspend fun getPrescriptions(): Response<List<Prescription>>
+    @PUT("api/patient/profile")
+    suspend fun updatePatientProfile(@Body profile: Map<String, Any>): Response<ProfileResponse>
     
-    @GET("api/prescriptions/{id}")
-    suspend fun getPrescriptionById(@Path("id") prescriptionId: String): Response<Prescription>
-    
-    // Triage endpoints
-    @POST("api/triage/analyze")
+    // Triage
+    @POST("api/patient/triage/analyze")
     suspend fun analyzeSymptoms(@Body request: TriageRequest): Response<TriageResponse>
     
-    @GET("api/triage/categories")
-    suspend fun getTriageCategories(): Response<List<SymptomCategory>>
+    @GET("api/patient/triage/categories")
+    suspend fun getTriageCategories(): Response<CategoriesResponse>
     
-    // Booking endpoints
-    @POST("api/booking/hold")
-    suspend fun createSlotHold(@Body request: SlotHoldRequest): Response<SlotHold>
+    // Prescriptions
+    @GET("api/patient/prescriptions")
+    suspend fun getPrescriptions(): Response<PrescriptionsResponse>
     
-    @POST("api/booking/confirm")
-    suspend fun confirmBooking(@Body request: BookingConfirmRequest): Response<BookingConfirmation>
+    // Patient Summary
+    @GET("api/patient/summary")
+    suspend fun getPatientSummary(): Response<PatientSummaryResponse>
 }

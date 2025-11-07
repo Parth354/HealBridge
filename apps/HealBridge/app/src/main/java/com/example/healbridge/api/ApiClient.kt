@@ -7,9 +7,11 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    private const val BASE_URL = "http://10.0.2.2:3000/" // Android emulator localhost
-    // For physical device, replace with your actual backend URL
-    // private const val BASE_URL = "https://your-backend-url.com/"
+    // Production backend URL
+    private const val BASE_URL = "https://healbridgebackend.onrender.com/"
+    // For local development, use:
+    // private const val BASE_URL = "http://10.0.2.2:3000/" // Android emulator
+    // private const val BASE_URL = "http://192.168.x.x:3000/" // Physical device
     
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY

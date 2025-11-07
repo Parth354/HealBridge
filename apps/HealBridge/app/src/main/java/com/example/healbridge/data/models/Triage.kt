@@ -22,13 +22,3 @@ data class SymptomCategory(
     val color: String
 )
 
-data class SlotHold(
-    val holdId: String,
-    val expiresAt: String,
-    val expiresInSeconds: Int
-)
-
-data class BookingConfirmation(
-    val appointment: Appointment,
-    val message: String
-)
