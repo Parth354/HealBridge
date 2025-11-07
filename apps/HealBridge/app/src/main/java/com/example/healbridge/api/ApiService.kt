@@ -74,4 +74,8 @@ interface ApiService {
     // Patient Summary
     @GET("api/patient/summary")
     suspend fun getPatientSummary(): Response<PatientSummaryResponse>
+    
+    // Firebase authentication
+    @POST("api/auth/firebase/login")
+    suspend fun registerFirebaseUser(@Body request: Map<String, String>): Response<SuccessResponse>
 }

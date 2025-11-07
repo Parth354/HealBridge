@@ -27,8 +27,3 @@ data class RescheduleRequest(
     val newTime: String
 )
 
-data class TimeSlot(
-    val time: String,
-    val isAvailable: Boolean,
-    val isBooked: Boolean
-)

@@ -25,6 +25,24 @@ class TokenInterceptor : Interceptor {
             request
         }
         
-        return chain.proceed(newRequest)
+        val response = chain.proceed(newRequest)
+        
+        // Handle 401 "User not found" for Firebase users
+        if (response.code == 401 && token != null) {
+            val responseBody = response.peekBody(2048).string()
+            if (responseBody.contains("User not found") && responseBody.contains("Firebase")) {
+                // Try to register Firebase user in backend
+                runBlocking {
+                    try {
+                        val firebaseAuthService = FirebaseAuthService()
+                        firebaseAuthService.registerFirebaseUserInBackend()
+                    } catch (e: Exception) {
+                        // Registration failed, continue with original response
+                    }
+                }
+            }
+        }
+        
+        return response
     }
 }

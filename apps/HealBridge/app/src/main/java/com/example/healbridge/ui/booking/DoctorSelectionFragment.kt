@@ -33,6 +33,7 @@ class DoctorSelectionFragment : Fragment() {
         viewModel = ViewModelProvider(requireActivity())[BookingViewModel::class.java]
         
         setupRecyclerView()
+        setupFilters()
         observeViewModel()
     }
     
@@ -45,6 +46,38 @@ class DoctorSelectionFragment : Fragment() {
             layoutManager = LinearLayoutManager(context)
             adapter = doctorsAdapter
         }
+    }
+    
+    private fun setupFilters() {
+        binding.filterButton.setOnClickListener {
+            showFilterDialog()
+        }
+        
+        binding.mapToggle.setOnClickListener {
+            toggleMapView()
+        }
+        
+        binding.nearbyButton.setOnClickListener {
+            searchNearbyDoctors()
+        }
+    }
+    
+    private fun showFilterDialog() {
+        val filterDialog = DoctorFilterDialog()
+        filterDialog.show(parentFragmentManager, "DoctorFilterDialog")
+    }
+    
+    private fun toggleMapView() {
+        val mapFragment = DoctorMapFragment()
+        parentFragmentManager.beginTransaction()
+            .replace(android.R.id.content, mapFragment)
+            .addToBackStack(null)
+            .commit()
+    }
+    
+    private fun searchNearbyDoctors() {
+        // Get user location and search nearby doctors
+        viewModel.searchDoctorsNearby()
     }
     
     private fun observeViewModel() {

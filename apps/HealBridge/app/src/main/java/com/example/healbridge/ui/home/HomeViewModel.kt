@@ -14,11 +14,11 @@ class HomeViewModel : ViewModel() {
     
     private val apiRepository = ApiRepository()
     
-    private val _userProfile = MutableLiveData<Patient?>()
-    val userProfile: LiveData<Patient?> = _userProfile
+    private val _userProfile = MutableLiveData<com.example.healbridge.data.models.ProfileResponse?>()
+    val userProfile: LiveData<com.example.healbridge.data.models.ProfileResponse?> = _userProfile
     
-    private val _upcomingAppointments = MutableLiveData<List<Appointment>>()
-    val upcomingAppointments: LiveData<List<Appointment>> = _upcomingAppointments
+    private val _upcomingAppointments = MutableLiveData<List<com.example.healbridge.data.models.AppointmentDetail>>()
+    val upcomingAppointments: LiveData<List<com.example.healbridge.data.models.AppointmentDetail>> = _upcomingAppointments
     
     private val _healthTip = MutableLiveData<HealthTip>()
     val healthTip: LiveData<HealthTip> = _healthTip
@@ -57,8 +57,8 @@ class HomeViewModel : ViewModel() {
             when (val result = apiRepository.getAppointments()) {
                 is NetworkResult.Success -> {
                     // Filter for upcoming appointments (next 7 days)
-                    val upcoming = result.data.filter { appointment ->
-                        appointment.status in listOf("scheduled", "confirmed")
+                    val upcoming = result.data.appointments.filter { appointment: com.example.healbridge.data.models.AppointmentDetail ->
+                        appointment.status in listOf("CONFIRMED", "STARTED")
                     }.take(3) // Show only first 3 appointments
                     _upcomingAppointments.value = upcoming
                 }

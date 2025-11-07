@@ -22,13 +22,39 @@
             android:textStyle="bold"
             android:textColor="@color/text_primary" />
 
-        <ImageView
-            android:id="@+id/filterIcon"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:src="@drawable/ic_filter"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:padding="4dp" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/filterButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Filter"
+            style="@style/Widget.Material3.Button.TextButton"
+            app:icon="@drawable/ic_filter"
+            android:layout_marginEnd="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/mapToggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Map"
+            style="@style/Widget.Material3.Button.TextButton"
+            app:icon="@drawable/ic_location" />
+
+    </LinearLayout>
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/nearbyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Find Nearby"
+            style="@style/Widget.Material3.Button.UnelevatedButton" />
 
     </LinearLayout>
 

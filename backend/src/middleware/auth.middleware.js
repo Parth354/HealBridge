@@ -50,10 +50,29 @@ const authenticate = async (req, res, next) => {
         });
 
         if (!user) {
-          return res.status(401).json({ 
-            error: 'User not found',
-            hint: 'Please complete registration with Firebase token'
-          });
+          // Auto-create user from Firebase token
+          try {
+            const { default: prisma } = await import('../config/prisma.js');
+            user = await prisma.user.create({
+              data: {
+                firebase_uid: firebaseDecoded.uid,
+                email: firebaseDecoded.email,
+                role: 'PATIENT',
+                language: 'en'
+              },
+              include: {
+                patient: true,
+                doctor: true
+              }
+            });
+            console.log(`✅ Auto-created Firebase user: ${user.id}`);
+          } catch (createError) {
+            console.error('Failed to auto-create user:', createError);
+            return res.status(401).json({ 
+              error: 'User registration failed',
+              hint: 'Please try again or contact support'
+            });
+          }
         }
 
         console.log(`✅ Authenticated via Firebase token: ${user.id}`);

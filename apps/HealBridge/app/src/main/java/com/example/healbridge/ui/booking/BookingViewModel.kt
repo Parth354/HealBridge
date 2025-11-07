@@ -60,6 +60,14 @@ class BookingViewModel : ViewModel() {
     var visitType: String = "CLINIC"
     var notes: String = ""
     
+    // Filter data
+    var userLat: Double? = null
+    var userLon: Double? = null
+    var sortBy: String = "distance"
+    var maxDistance: Int = 50
+    var minRating: Double = 0.0
+    var maxFee: Double? = null
+    
     fun nextStep() {
         when (_currentStep.value) {
             0 -> {
@@ -116,7 +124,14 @@ class BookingViewModel : ViewModel() {
     private fun loadDoctorsBySpecialty(specialty: String) {
         viewModelScope.launch {
             _isLoading.value = true
-            when (val result = apiRepository.searchDoctors(specialty = specialty)) {
+            when (val result = apiRepository.searchDoctors(
+                specialty = specialty,
+                lat = userLat,
+                lon = userLon,
+                sortBy = sortBy,
+                maxDistance = maxDistance,
+                minRating = minRating
+            )) {
                 is NetworkResult.Success -> {
                     _availableDoctors.value = result.data.doctors
                 }
@@ -243,6 +258,48 @@ class BookingViewModel : ViewModel() {
     
     fun updateDuration(duration: String) {
         this.duration = duration
+    }
+    
+    fun updateLocation(lat: Double, lon: Double) {
+        this.userLat = lat
+        this.userLon = lon
+    }
+    
+    fun updateFilters(sortBy: String? = null, maxDistance: Int? = null, minRating: Double? = null, maxFee: Double? = null) {
+        sortBy?.let { this.sortBy = it }
+        maxDistance?.let { this.maxDistance = it }
+        minRating?.let { this.minRating = it }
+        maxFee?.let { this.maxFee = it }
+        
+        // Reload doctors with new filters
+        _triageResult.value?.let { result ->
+            loadDoctorsBySpecialty(result.specialty)
+        }
+    }
+    
+    fun searchDoctorsNearby() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            when (val result = apiRepository.searchDoctors(
+                lat = userLat,
+                lon = userLon,
+                sortBy = sortBy,
+                maxDistance = maxDistance,
+                minRating = minRating
+            )) {
+                is NetworkResult.Success -> {
+                    _availableDoctors.value = result.data.doctors.filter { doctor ->
+                        maxFee?.let { doctor.consultationFee <= it } ?: true
+                    }
+                }
+                is NetworkResult.Error -> {
+                    _error.value = result.message
+                    _availableDoctors.value = emptyList()
+                }
+                is NetworkResult.Loading -> {}
+            }
+            _isLoading.value = false
+        }
     }
     
     private fun getCurrentDate(): String {

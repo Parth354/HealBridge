@@ -46,6 +46,12 @@ apiClient.interceptors.response.use(
       
       switch (status) {
         case 401:
+          // Check if it's a "User not found" error for Firebase users
+          if (data?.error === 'User not found' && data?.hint?.includes('Firebase')) {
+            console.log('Firebase user not registered in backend, attempting auto-registration...');
+            // Don't redirect to login, let the app handle Firebase registration
+            return Promise.reject({ message: 'FIREBASE_USER_NOT_REGISTERED', status, data });
+          }
           // Unauthorized - redirect to login
           localStorage.removeItem('authToken');
           localStorage.removeItem('doctor');

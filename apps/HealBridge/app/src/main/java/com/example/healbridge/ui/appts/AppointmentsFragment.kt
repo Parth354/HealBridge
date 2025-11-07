@@ -20,7 +20,7 @@ class AppointmentsFragment : Fragment() {
     private val binding get() = _binding!!
     private lateinit var apiRepository: ApiRepository
     private lateinit var appointmentsAdapter: AppointmentsAdapter
-    private val appointments = mutableListOf<com.example.healbridge.data.models.Appointment>()
+    private val appointments = mutableListOf<com.example.healbridge.data.models.AppointmentDetail>()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentAppointmentsBinding.inflate(inflater, container, false)
@@ -54,7 +54,7 @@ class AppointmentsFragment : Fragment() {
                         is NetworkResult.Success -> {
                             if (_binding != null) {
                                 appointments.clear()
-                                appointments.addAll(result.data)
+                                appointments.addAll(result.data.appointments)
                                 updateUI()
                             }
                         }

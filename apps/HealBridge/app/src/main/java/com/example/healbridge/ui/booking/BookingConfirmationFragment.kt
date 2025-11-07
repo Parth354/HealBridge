@@ -1,10 +1,14 @@
 package com.example.healbridge.ui.booking
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.example.healbridge.databinding.FragmentBookingConfirmationBinding
@@ -143,12 +147,45 @@ class BookingConfirmationFragment : Fragment() {
         binding.bookingSummaryCard.visibility = View.GONE
         binding.confirmButton.visibility = View.GONE
         
-        binding.appointmentId.text = "Appointment ID: ${confirmation.appointment.id}"
+        val appointmentId = confirmation.appointment.id
+        binding.appointmentId.text = "Appointment ID: $appointmentId"
+        
+        // Generate appointment link
+        val appointmentLink = "https://healbridge.app/appointment/$appointmentId"
+        binding.appointmentLink.text = appointmentLink
+        
+        // Share appointment link
+        binding.shareButton.setOnClickListener {
+            shareAppointmentLink(appointmentLink, appointmentId)
+        }
+        
+        // Copy link to clipboard
+        binding.copyLinkButton.setOnClickListener {
+            copyToClipboard(appointmentLink)
+        }
         
         binding.goHomeButton.setOnClickListener {
             startActivity(Intent(requireContext(), Home::class.java))
             requireActivity().finish()
         }
+    }
+    
+    private fun shareAppointmentLink(link: String, appointmentId: String) {
+        val shareIntent = Intent().apply {
+            action = Intent.ACTION_SEND
+            putExtra(Intent.EXTRA_TEXT, "Your appointment is confirmed!\n\nAppointment ID: $appointmentId\nLink: $link")
+            type = "text/plain"
+        }
+        startActivity(Intent.createChooser(shareIntent, "Share Appointment"))
+    }
+    
+    private fun copyToClipboard(text: String) {
+        val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("Appointment Link", text)
+        clipboard.setPrimaryClip(clip)
+        
+        // Show toast
+        Toast.makeText(requireContext(), "Link copied to clipboard", Toast.LENGTH_SHORT).show()
     }
     
     private fun formatDate(dateString: String): String {

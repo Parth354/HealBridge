@@ -100,12 +100,28 @@ class HomeFragment : Fragment() {
     private fun observeViewModel() {
         viewModel.userProfile.observe(viewLifecycleOwner) { profile ->
             profile?.let {
-                binding.userNameText.text = it.name
+                val firstName = it.profile.firstName ?: "User"
+                binding.userNameText.text = firstName
             }
         }
         
         viewModel.upcomingAppointments.observe(viewLifecycleOwner) { appointments ->
-            appointmentsAdapter.submitList(appointments)
+            appointmentsAdapter.submitList(appointments.map { appointmentDetail ->
+                com.example.healbridge.data.models.Appointment(
+                    id = appointmentDetail.id,
+                    doctorId = appointmentDetail.doctorId,
+                    patientId = appointmentDetail.patientId,
+                    doctorName = "Dr. ${appointmentDetail.doctor.user.firstName} ${appointmentDetail.doctor.user.lastName}",
+                    specialty = appointmentDetail.doctor.specialty ?: "General",
+                    appointmentDate = appointmentDetail.startTs.substring(0, 10),
+                    appointmentTime = appointmentDetail.startTs.substring(11, 16),
+                    status = appointmentDetail.status,
+                    consultationFee = appointmentDetail.feeMock,
+                    clinicName = appointmentDetail.clinic.name,
+                    clinicAddress = appointmentDetail.clinic.address,
+                    notes = null
+                )
+            })
             
             // Show/hide empty state
             if (appointments.isEmpty()) {
