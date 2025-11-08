@@ -154,15 +154,30 @@ class BookingViewModel(application: Application) : AndroidViewModel(application)
     fun selectDoctor(doctor: Doctor) {
         _selectedDoctor.value = doctor
         _canProceed.value = true
+        
+        // Automatically load slots for today when doctor is selected
+        val today = getCurrentDate()
+        if (_selectedDate.value == null) {
+            _selectedDate.value = today
+        }
+        
+        // Load slots for the selected doctor and current date
+        loadTimeSlots(doctor.id, forceRefresh = false)
     }
     
     private fun loadTimeSlots(doctorId: String, forceRefresh: Boolean = false) {
         val doctor = _selectedDoctor.value
         val clinicId = doctor?.clinicId
+        
+        android.util.Log.d("BookingViewModel", "loadTimeSlots called: doctorId=$doctorId, clinicId=$clinicId")
+        android.util.Log.d("BookingViewModel", "Doctor details: ${doctor?.let { "name=${it.name}, clinicId=${it.clinicId}, clinicName=${it.clinicName}" } ?: "null"}")
+        
         if (clinicId == null || clinicId.isBlank()) {
-            _error.value = "Doctor clinic information is missing. Please select another doctor."
+            val errorMsg = "Doctor clinic information is missing. Doctor: ${doctor?.name}, Clinic ID: $clinicId. Please select another doctor."
+            _error.value = errorMsg
             _availableSlots.value = emptyList()
-            android.util.Log.w("BookingViewModel", "Cannot load slots: clinicId is null or blank for doctor $doctorId")
+            android.util.Log.e("BookingViewModel", "❌ Cannot load slots: clinicId is null or blank")
+            android.util.Log.e("BookingViewModel", "Doctor object: ${doctor?.let { "id=${it.id}, name=${it.name}, clinicId='${it.clinicId}', clinicName=${it.clinicName}" } ?: "null"}")
             return
         }
         
@@ -171,27 +186,30 @@ class BookingViewModel(application: Application) : AndroidViewModel(application)
             _isLoading.value = true
             _error.value = null
             
-            android.util.Log.d("BookingViewModel", "Loading slots for doctor=$doctorId, clinic=$clinicId, date=$date, forceRefresh=$forceRefresh")
+            android.util.Log.d("BookingViewModel", "🔄 Loading slots for doctor=$doctorId, clinic=$clinicId, date=$date, forceRefresh=$forceRefresh")
             
             when (val result = apiRepository.getDoctorSlots(doctorId, clinicId, date, useCache = !forceRefresh)) {
                 is NetworkResult.Success -> {
                     _availableSlots.value = result.data
-                    android.util.Log.d("BookingViewModel", "Loaded ${result.data.size} slots")
+                    android.util.Log.d("BookingViewModel", "✅ Loaded ${result.data.size} slots successfully")
                     if (result.data.isEmpty()) {
-                        _error.value = "No available slots for this date. The doctor may not have schedule blocks configured, or all slots are booked. Please try another date."
-                        android.util.Log.w("BookingViewModel", "No slots available for doctor $doctorId on $date - check if doctor has schedule blocks")
+                        _error.value = "No available slots for this date. The doctor may not have schedule blocks configured for this date, or all slots are booked. Please try selecting a different date."
+                        android.util.Log.w("BookingViewModel", "⚠️ No slots available for doctor $doctorId at clinic $clinicId on $date")
+                        android.util.Log.w("BookingViewModel", "💡 This usually means: 1) No schedule blocks configured, 2) All slots booked, 3) All slots in the past")
                     } else {
                         _error.value = null // Clear any previous errors
+                        android.util.Log.d("BookingViewModel", "✅ Successfully displaying ${result.data.size} available slots")
                     }
                 }
                 is NetworkResult.Error -> {
                     val errorMsg = parseErrorMessage(result.message ?: "Failed to load time slots")
                     _error.value = errorMsg
                     _availableSlots.value = emptyList()
-                    android.util.Log.e("BookingViewModel", "Error loading slots: $errorMsg")
+                    android.util.Log.e("BookingViewModel", "❌ Error loading slots: $errorMsg")
+                    android.util.Log.e("BookingViewModel", "Error context: doctorId=$doctorId, clinicId=$clinicId, date=$date")
                 }
                 is NetworkResult.Loading -> {
-                    // Handle loading
+                    android.util.Log.d("BookingViewModel", "⏳ Loading slots...")
                 }
             }
             _isLoading.value = false

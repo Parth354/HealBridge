@@ -20,7 +20,9 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.healbridge.api.ApiRepository
 import com.example.healbridge.data.NetworkResult
+import com.example.healbridge.data.models.BackendDoctorResponse
 import com.example.healbridge.data.models.Doctor
+import com.example.healbridge.data.models.toDoctor
 import com.example.healbridge.databinding.FragmentMapBinding
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
@@ -272,8 +274,9 @@ class MapFragment : Fragment() {
                                 
                                 // Only add doctors that have valid clinic with coordinates
                                 if (clinic != null && clinic.lat != null && clinic.lon != null) {
-                                    // Use the toDoctor extension function which handles name extraction properly
-                                    val doctor = backendDoctor.toDoctor(
+                                    // Convert backend doctor to app Doctor model
+                                    val doctor = com.example.healbridge.data.models.toDoctor(
+                                        backendDoctor,
                                         userEmail = backendDoctor.user?.email,
                                         userPhone = backendDoctor.user?.phone
                                     )

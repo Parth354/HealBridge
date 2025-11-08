@@ -11,22 +11,49 @@ const noAuth = async (req, res, next) => {
 
     if (!publicUser) {
       // Create public user if it doesn't exist
-      publicUser = await prisma.user.create({
-        data: {
-          id: 'public-user',
-          email: 'public@healbridge.com',
-          role: 'PATIENT',
-          language: 'en',
-          firebase_uid: 'public-firebase-uid',
-          patient: {
-            create: {
-              id: 'public-patient'
+      // Note: Patient model requires: id, user_id, name, dob, gender, emergencyContact
+      const publicPatientData = {
+        id: 'public-patient',
+        name: 'Public User',
+        dob: new Date('1990-01-01'),
+        gender: 'Other',
+        emergencyContact: '+1234567890'
+      };
+
+      try {
+        publicUser = await prisma.user.create({
+          data: {
+            id: 'public-user',
+            email: 'public@healbridge.com',
+            role: 'PATIENT',
+            language: 'en',
+            firebase_uid: 'public-firebase-uid',
+            patient: {
+              create: publicPatientData
             }
-          }
-        },
-        include: { patient: true }
-      });
-      console.log('✅ Created public user for no-auth access');
+          },
+          include: { patient: true }
+        });
+        console.log('✅ Created public user for no-auth access');
+      } catch (createError) {
+        // If user creation fails, try to find existing user or use upsert
+        console.error('Failed to create public user, trying upsert:', createError.message);
+        publicUser = await prisma.user.upsert({
+          where: { id: 'public-user' },
+          update: {},
+          create: {
+            id: 'public-user',
+            email: 'public@healbridge.com',
+            role: 'PATIENT',
+            language: 'en',
+            firebase_uid: 'public-firebase-uid',
+            patient: {
+              create: publicPatientData
+            }
+          },
+          include: { patient: true }
+        });
+      }
     }
 
     // Set mock user for compatibility with existing code

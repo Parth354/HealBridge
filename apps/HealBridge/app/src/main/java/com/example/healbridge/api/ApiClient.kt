@@ -20,9 +20,11 @@ object ApiClient {
     private val okHttpClient = OkHttpClient.Builder()
         // .addInterceptor(TokenInterceptor()) // Removed for public access
         .addInterceptor(loggingInterceptor)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        // Increased timeouts for slow Render backend (free tier can be slow to wake up)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true) // Retry on connection failures
         .build()
     
     private val retrofit = Retrofit.Builder()

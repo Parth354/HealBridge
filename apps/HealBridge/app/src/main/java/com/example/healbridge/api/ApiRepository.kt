@@ -44,8 +44,9 @@ class ApiRepository(private val context: Context? = null) {
                 
                 // Map backend response to app Doctor model
                 val doctors = backendResponse.doctors.map { backendDoctor ->
-                    // Use the toDoctor extension function which handles name extraction properly
-                    backendDoctor.toDoctor(
+                    // Use the toDoctor function which handles name extraction properly
+                    com.example.healbridge.data.models.toDoctor(
+                        backendDoctor,
                         userEmail = backendDoctor.user?.email,
                         userPhone = backendDoctor.user?.phone
                     )
@@ -311,17 +312,41 @@ class ApiRepository(private val context: Context? = null) {
     }
     
     // Get Appointments
-    suspend fun getAppointments(status: String? = null): NetworkResult<AppointmentsResponse> {
-        return try {
-            val response = apiService.getAppointments(status)
-            if (response.isSuccessful && response.body() != null) {
-                NetworkResult.Success(response.body()!!)
-            } else {
-                NetworkResult.Error("Failed to get appointments", response.code())
+    suspend fun getAppointments(status: String? = null, maxRetries: Int = 2): NetworkResult<AppointmentsResponse> {
+        var lastException: Exception? = null
+        repeat(maxRetries + 1) { attempt ->
+            try {
+                val response = apiService.getAppointments(status)
+                if (response.isSuccessful && response.body() != null) {
+                    return NetworkResult.Success(response.body()!!)
+                } else {
+                    val errorMsg = response.errorBody()?.string() ?: "Failed to get appointments"
+                    return NetworkResult.Error("Failed to load appointments: $errorMsg", response.code())
+                }
+            } catch (e: java.net.SocketTimeoutException) {
+                lastException = e
+                if (attempt < maxRetries) {
+                    android.util.Log.w("ApiRepository", "Timeout loading appointments, retrying... (attempt ${attempt + 1}/${maxRetries + 1})")
+                    kotlinx.coroutines.delay((attempt + 1) * 1000L) // Exponential backoff
+                } else {
+                    return NetworkResult.Error("Request timed out. The server may be slow. Please check your connection and try again.", 0)
+                }
+            } catch (e: Exception) {
+                lastException = e
+                if (attempt < maxRetries && (e.message?.contains("timeout", ignoreCase = true) == true || e is java.net.UnknownHostException)) {
+                    android.util.Log.w("ApiRepository", "Network error loading appointments, retrying... (attempt ${attempt + 1}/${maxRetries + 1})")
+                    kotlinx.coroutines.delay((attempt + 1) * 1000L)
+                } else {
+                    val errorMsg = when {
+                        e.message?.contains("timeout", ignoreCase = true) == true -> "Request timed out. Please check your connection."
+                        e is java.net.UnknownHostException -> "Cannot reach server. Please check your internet connection."
+                        else -> e.message ?: "Network error: ${e.javaClass.simpleName}"
+                    }
+                    return NetworkResult.Error(errorMsg)
+                }
             }
-        } catch (e: Exception) {
-            NetworkResult.Error(e.message ?: "Network error")
         }
+        return NetworkResult.Error(lastException?.message ?: "Failed to load appointments after $maxRetries retries")
     }
     
     // Check-in
@@ -393,18 +418,37 @@ class ApiRepository(private val context: Context? = null) {
         }
     }
     
-    // Triage
-    suspend fun analyzeSymptoms(request: TriageRequest): NetworkResult<TriageResponse> {
-        return try {
-            val response = apiService.analyzeSymptoms(request)
-            if (response.isSuccessful && response.body() != null) {
-                NetworkResult.Success(response.body()!!)
-            } else {
-                NetworkResult.Error("Failed to analyze symptoms", response.code())
+    // Triage with retry logic
+    suspend fun analyzeSymptoms(request: TriageRequest, maxRetries: Int = 2): NetworkResult<TriageResponse> {
+        var lastException: Exception? = null
+        repeat(maxRetries + 1) { attempt ->
+            try {
+                val response = apiService.analyzeSymptoms(request)
+                if (response.isSuccessful && response.body() != null) {
+                    return NetworkResult.Success(response.body()!!)
+                } else {
+                    val errorMsg = response.errorBody()?.string() ?: "Failed to analyze symptoms"
+                    return NetworkResult.Error("Failed to analyze symptoms: $errorMsg", response.code())
+                }
+            } catch (e: java.net.SocketTimeoutException) {
+                lastException = e
+                if (attempt < maxRetries) {
+                    android.util.Log.w("ApiRepository", "Timeout analyzing symptoms, retrying... (attempt ${attempt + 1}/${maxRetries + 1})")
+                    kotlinx.coroutines.delay((attempt + 1) * 1000L) // Exponential backoff
+                } else {
+                    return NetworkResult.Error("Request timed out. The server may be slow. Please try again.", 0)
+                }
+            } catch (e: Exception) {
+                lastException = e
+                if (attempt < maxRetries && e.message?.contains("timeout", ignoreCase = true) == true) {
+                    android.util.Log.w("ApiRepository", "Network error analyzing symptoms, retrying... (attempt ${attempt + 1}/${maxRetries + 1})")
+                    kotlinx.coroutines.delay((attempt + 1) * 1000L)
+                } else {
+                    return NetworkResult.Error(e.message ?: "Network error: ${e.javaClass.simpleName}")
+                }
             }
-        } catch (e: Exception) {
-            NetworkResult.Error(e.message ?: "Network error")
         }
+        return NetworkResult.Error(lastException?.message ?: "Network error after $maxRetries retries")
     }
     
     suspend fun getTriageCategories(): NetworkResult<CategoriesResponse> {

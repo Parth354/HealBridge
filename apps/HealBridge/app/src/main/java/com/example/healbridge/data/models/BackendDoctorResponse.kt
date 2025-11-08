@@ -53,20 +53,20 @@ data class BackendDoctorSearchResponse(
 )
 
 // Helper function to convert backend response to app Doctor model
-fun BackendDoctorResponse.toDoctor(userEmail: String? = null, userPhone: String? = null): Doctor {
-    val clinic = nearestClinic ?: clinics.firstOrNull()
+fun toDoctor(backendDoctor: BackendDoctorResponse, userEmail: String? = null, userPhone: String? = null): Doctor {
+    val clinic = backendDoctor.nearestClinic ?: backendDoctor.clinics.firstOrNull()
     
     // Use name from backend response, with fallbacks
     val doctorName = when {
-        !name.isNullOrBlank() -> name
-        !firstName.isNullOrBlank() && !lastName.isNullOrBlank() -> "$firstName $lastName".trim()
-        !firstName.isNullOrBlank() -> firstName
-        !lastName.isNullOrBlank() -> lastName
+        !backendDoctor.name.isNullOrBlank() -> backendDoctor.name
+        !backendDoctor.firstName.isNullOrBlank() && !backendDoctor.lastName.isNullOrBlank() -> "${backendDoctor.firstName} ${backendDoctor.lastName}".trim()
+        !backendDoctor.firstName.isNullOrBlank() -> backendDoctor.firstName
+        !backendDoctor.lastName.isNullOrBlank() -> backendDoctor.lastName
         !userEmail.isNullOrBlank() -> {
             val emailName = userEmail.substringBefore("@").replace(".", " ").replace("_", " ")
             emailName.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercaseChar() } }
         }
-        else -> "Dr. $userId"
+        else -> "Dr. ${backendDoctor.userId}"
     }
     
     // Ensure name starts with "Dr." if not already
@@ -77,20 +77,20 @@ fun BackendDoctorResponse.toDoctor(userEmail: String? = null, userPhone: String?
     }
 
     return Doctor(
-        id = doctorId,
+        id = backendDoctor.doctorId,
         name = finalName,
-        specialty = specialties.firstOrNull() ?: "General",
-        email = user?.email ?: userEmail ?: "",
-        phone = user?.phone ?: userPhone ?: "",
-        experience = (avgConsultMin ?: 15) / 2, // Rough estimate: divide avg consult time by 2
-        rating = rating,
+        specialty = backendDoctor.specialties.firstOrNull() ?: "General",
+        email = backendDoctor.user?.email ?: userEmail ?: "",
+        phone = backendDoctor.user?.phone ?: userPhone ?: "",
+        experience = (backendDoctor.avgConsultMin ?: 15) / 2, // Rough estimate: divide avg consult time by 2
+        rating = backendDoctor.rating,
         profileImage = null,
         clinicId = clinic?.id ?: "",
         clinicName = clinic?.name ?: "Unknown Clinic",
         clinicAddress = clinic?.address ?: "",
         consultationFee = 500.0, // Default fee - backend doesn't provide this
-        isAvailable = nextAvailable != null,
-        bio = "Specializes in ${specialties.joinToString(", ")}"
+        isAvailable = backendDoctor.nextAvailable != null,
+        bio = "Specializes in ${backendDoctor.specialties.joinToString(", ")}"
     )
 }
 

@@ -80,8 +80,22 @@ class TimeSlotFragment : Fragment() {
     private fun observeViewModel() {
         viewModel.selectedDoctor.observe(viewLifecycleOwner) { doctor ->
             doctor?.let {
-                binding.doctorName.text = "Dr. ${it.name}"
+                binding.doctorName.text = it.name
                 binding.doctorSpecialty.text = it.specialty
+                
+                // When doctor is selected, load slots for current date
+                val currentDate = viewModel.selectedDate.value
+                if (currentDate != null) {
+                    viewModel.selectDate(currentDate, forceRefresh = false)
+                } else {
+                    // Set today's date if no date selected
+                    val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                    viewModel.selectDate(today)
+                }
+            } ?: run {
+                // No doctor selected - show message
+                binding.doctorName.text = "No doctor selected"
+                binding.doctorSpecialty.text = "Please go back and select a doctor"
             }
         }
         
