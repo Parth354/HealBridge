@@ -34,6 +34,7 @@ class MapFragment : Fragment() {
     private val doctors = mutableListOf<Doctor>()
     private var userLatitude = 28.6139
     private var userLongitude = 77.2090
+    private var maxDistance = 50 // Default search radius in km
     
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -47,6 +48,8 @@ class MapFragment : Fragment() {
             }
             else -> {
                 loadMap()
+                // Load doctors even without location permission (uses default location)
+                loadDoctorsWithCoordinates()
             }
         }
     }
@@ -57,13 +60,14 @@ class MapFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        apiRepository = ApiRepository()
+        apiRepository = ApiRepository(requireContext())
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity())
         
         setupWebView()
         setupSearch()
+        setupDistanceFilter()
         checkLocationPermission()
-        loadDoctors()
+        // Don't call loadDoctors() here - it will be called after location is obtained
     }
     
     @SuppressLint("SetJavaScriptEnabled")
@@ -92,6 +96,26 @@ class MapFragment : Fragment() {
         })
     }
     
+    private fun setupDistanceFilter() {
+        binding.distanceChipGroup.setOnCheckedStateChangeListener { group, checkedIds ->
+            val checkedId = checkedIds.firstOrNull()
+            if (checkedId != null) {
+                // Use resource IDs directly to avoid view binding naming issues
+                maxDistance = when (checkedId) {
+                    com.example.healbridge.R.id.chip_5km -> 5
+                    com.example.healbridge.R.id.chip_10km -> 10
+                    com.example.healbridge.R.id.chip_25km -> 25
+                    com.example.healbridge.R.id.chip_50km -> 50
+                    com.example.healbridge.R.id.chip_100km -> 100
+                    else -> 50
+                }
+                android.util.Log.d("MapFragment", "Distance filter changed to $maxDistance km")
+                // Reload doctors with new distance filter
+                loadDoctorsWithCoordinates()
+            }
+        }
+    }
+    
     private fun checkLocationPermission() {
         when {
             ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED -> {
@@ -114,8 +138,12 @@ class MapFragment : Fragment() {
                 userLongitude = it.longitude
             }
             loadMap()
+            // Load doctors after getting location
+            loadDoctorsWithCoordinates()
         }.addOnFailureListener {
             loadMap()
+            // Still try to load doctors with default location
+            loadDoctorsWithCoordinates()
         }
     }
     
@@ -154,9 +182,11 @@ class MapFragment : Fragment() {
                             .bindPopup(
                                 '<b>' + doctor.name + '</b><br>' +
                                 doctor.specialty + '<br>' +
-                                'Rating: ' + doctor.rating + '/5<br>' +
+                                'Rating: ' + doctor.rating.toFixed(1) + '/5<br>' +
                                 'Fee: ₹' + doctor.fee + '<br>' +
-                                doctor.clinic
+                                doctor.clinic + '<br>' +
+                                (doctor.address ? doctor.address + '<br>' : '') +
+                                (doctor.distance ? doctor.distance : '')
                             );
                         
                         marker.on('click', function() {
@@ -165,6 +195,12 @@ class MapFragment : Fragment() {
                         
                         markers.push(marker);
                     });
+                    
+                    // Fit map to show all markers if there are any
+                    if (doctors.length > 0) {
+                        var group = new L.featureGroup(markers);
+                        map.fitBounds(group.getBounds().pad(0.1));
+                    }
                 }
                 
                 function clearMarkers() {
@@ -181,99 +217,191 @@ class MapFragment : Fragment() {
         binding.webviewMap.loadDataWithBaseURL(null, mapHtml, "text/html", "UTF-8", null)
     }
     
-    private fun loadDoctors() {
+    // Removed loadDoctors() - now using loadDoctorsWithCoordinates() which fetches raw backend response with clinic coordinates
+    // Removed showSampleDoctors() - we now always fetch from backend
+    
+    private fun updateDoctorsCount() {
+        if (_binding != null) {
+            binding.tvDoctorsCount.text = "${doctors.size} doctors found within $maxDistance km"
+        }
+    }
+    
+    // This method is no longer needed - we use loadDoctorsWithCoordinates() directly
+    // Keeping for backwards compatibility but it now just calls loadDoctorsWithCoordinates
+    private fun addDoctorsToMap() {
+        if (_binding == null) return
+        addDoctorsToMapWithCoordinates()
+    }
+    
+    // Store doctor with clinic coordinates
+    private data class DoctorWithLocation(
+        val doctor: Doctor,
+        val lat: Double,
+        val lng: Double,
+        val distance: Double?
+    )
+    
+    private val doctorsWithLocation = mutableListOf<DoctorWithLocation>()
+    
+    private fun loadDoctorsWithCoordinates() {
         lifecycleScope.launch {
             try {
-                when (val result = apiRepository.searchDoctors()) {
+                binding.progressBar.visibility = View.VISIBLE
+                
+                // Fetch raw backend response to get clinic coordinates
+                when (val result = apiRepository.searchDoctorsRaw(
+                    specialty = null,
+                    lat = userLatitude,
+                    lon = userLongitude,
+                    visitType = null,
+                    sortBy = "distance",
+                    maxDistance = maxDistance,
+                    minRating = 0.0,
+                    limit = 50
+                )) {
                     is NetworkResult.Success -> {
                         if (_binding != null) {
                             doctors.clear()
-                            doctors.addAll(result.data.doctors)
+                            doctorsWithLocation.clear()
+                            
+                            // Process backend response and extract clinic coordinates
+                            // For doctors with multiple clinics, we'll show the nearest clinic on the map
+                            result.data.doctors.forEach { backendDoctor ->
+                                // Use nearest clinic if available, otherwise use first clinic
+                                val clinic = backendDoctor.nearestClinic ?: backendDoctor.clinics.firstOrNull()
+                                
+                                // Only add doctors that have valid clinic with coordinates
+                                if (clinic != null && clinic.lat != null && clinic.lon != null) {
+                                    // Use the toDoctor extension function which handles name extraction properly
+                                    val doctor = backendDoctor.toDoctor(
+                                        userEmail = backendDoctor.user?.email,
+                                        userPhone = backendDoctor.user?.phone
+                                    )
+                                    
+                                    doctors.add(doctor)
+                                    doctorsWithLocation.add(
+                                        DoctorWithLocation(
+                                            doctor = doctor,
+                                            lat = clinic.lat,
+                                            lng = clinic.lon,
+                                            distance = clinic.distance
+                                        )
+                                    )
+                                } else {
+                                    android.util.Log.w("MapFragment", "Skipping doctor ${backendDoctor.doctorId} - no valid clinic coordinates")
+                                }
+                            }
+                            
+                            android.util.Log.d("MapFragment", "Processed ${doctors.size} doctors from ${result.data.doctors.size} backend results")
+                            
                             updateDoctorsCount()
-                            addDoctorsToMap()
+                            addDoctorsToMapWithCoordinates()
+                            binding.progressBar.visibility = View.GONE
+                            
+                            if (doctors.isEmpty() && isAdded && context != null) {
+                                Toast.makeText(context, "No doctors found within $maxDistance km radius", Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.util.Log.d("MapFragment", "Loaded ${doctors.size} doctors with coordinates")
+                            }
                         }
                     }
                     is NetworkResult.Error -> {
-                        if (_binding != null) {
-                            showSampleDoctors()
+                        if (_binding != null && isAdded && context != null) {
+                            binding.progressBar.visibility = View.GONE
+                            android.util.Log.e("MapFragment", "Error loading doctors: ${result.message}")
+                            val errorMessage = if (result.message?.contains("timeout", ignoreCase = true) == true) {
+                                "Request timed out. Please check your internet connection and try again."
+                            } else {
+                                "Failed to load doctors: ${result.message}"
+                            }
+                            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
                         }
                     }
-                    is NetworkResult.Loading -> {}
+                    is NetworkResult.Loading -> {
+                        binding.progressBar.visibility = View.VISIBLE
+                    }
                 }
             } catch (e: Exception) {
-                if (_binding != null) {
-                    showSampleDoctors()
+                if (_binding != null && isAdded && context != null) {
+                    binding.progressBar.visibility = View.GONE
+                    android.util.Log.e("MapFragment", "Exception loading doctors", e)
+                    val errorMessage = if (e.message?.contains("timeout", ignoreCase = true) == true || 
+                                           e is java.net.SocketTimeoutException) {
+                        "Request timed out. Please check your internet connection and try again."
+                    } else {
+                        "Error: ${e.message}"
+                    }
+                    Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
                 }
             }
         }
     }
     
-    private fun showSampleDoctors() {
-        val sampleDoctors = listOf(
-            Doctor("1", "Dr. John Smith", "Cardiologist", "john@example.com", "+91-9876543210", 10, 4.5, null, "Apollo Hospital", "Delhi", 500.0, true, "Experienced cardiologist"),
-            Doctor("2", "Dr. Sarah Johnson", "Dermatologist", "sarah@example.com", "+91-9876543211", 8, 4.8, null, "Max Hospital", "Delhi", 400.0, true, "Skin specialist"),
-            Doctor("3", "Dr. Mike Wilson", "Orthopedic", "mike@example.com", "+91-9876543212", 12, 4.3, null, "Fortis Hospital", "Delhi", 600.0, true, "Bone and joint expert")
-        )
-        doctors.clear()
-        doctors.addAll(sampleDoctors)
-        updateDoctorsCount()
-        addDoctorsToMap()
-    }
-    
-    private fun updateDoctorsCount() {
-        if (_binding != null) {
-            binding.tvDoctorsCount.text = "${doctors.size} doctors found nearby"
-        }
-    }
-    
-    private fun addDoctorsToMap() {
+    private fun addDoctorsToMapWithCoordinates() {
         if (_binding == null) return
         
-        val doctorsJson = doctors.mapIndexed { index, doctor ->
-            val lat = userLatitude + (index * 0.01) // Sample locations near user
-            val lng = userLongitude + (index * 0.01)
+        if (doctorsWithLocation.isEmpty()) {
+            android.util.Log.d("MapFragment", "No doctors with valid coordinates to display")
+            return
+        }
+        
+        val doctorsJson = doctorsWithLocation.map { docWithLoc ->
+            val distanceText = docWithLoc.distance?.let { "%.1f km".format(it) } ?: "Unknown distance"
             """
             {
-                "id": "${doctor.id}",
-                "name": "${doctor.name}",
-                "specialty": "${doctor.specialty}",
-                "rating": ${doctor.rating},
-                "fee": ${doctor.consultationFee},
-                "clinic": "${doctor.clinicName}",
-                "lat": $lat,
-                "lng": $lng
+                "id": "${docWithLoc.doctor.id}",
+                "name": "${docWithLoc.doctor.name.escapeJson()}",
+                "specialty": "${docWithLoc.doctor.specialty.escapeJson()}",
+                "rating": ${docWithLoc.doctor.rating},
+                "fee": ${docWithLoc.doctor.consultationFee.toInt()},
+                "clinic": "${docWithLoc.doctor.clinicName.escapeJson()}",
+                "address": "${docWithLoc.doctor.clinicAddress.escapeJson()}",
+                "distance": "$distanceText",
+                "lat": ${docWithLoc.lat},
+                "lng": ${docWithLoc.lng}
             }
             """.trimIndent()
         }.joinToString(",")
         
-        binding.webviewMap.evaluateJavascript("addDoctors([$doctorsJson]);", null)
+        android.util.Log.d("MapFragment", "Adding ${doctorsWithLocation.size} doctors to map")
+        binding.webviewMap.evaluateJavascript("clearMarkers(); addDoctors([$doctorsJson]);", null)
+    }
+    
+    private fun String.escapeJson(): String {
+        return this.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
     }
     
     private fun filterDoctors(query: String) {
         if (_binding == null) return
         
-        val filteredDoctors = if (query.isEmpty()) {
-            doctors
+        val filteredDoctorsWithLocation = if (query.isEmpty()) {
+            doctorsWithLocation
         } else {
-            doctors.filter { 
-                it.name.contains(query, ignoreCase = true) || 
-                it.specialty.contains(query, ignoreCase = true)
+            doctorsWithLocation.filter { 
+                it.doctor.name.contains(query, ignoreCase = true) || 
+                it.doctor.specialty.contains(query, ignoreCase = true) ||
+                it.doctor.clinicName.contains(query, ignoreCase = true)
             }
         }
         
-        val doctorsJson = filteredDoctors.mapIndexed { index, doctor ->
-            val lat = userLatitude + (index * 0.01) // Sample locations near user
-            val lng = userLongitude + (index * 0.01)
+        val doctorsJson = filteredDoctorsWithLocation.map { docWithLoc ->
+            val distanceText = docWithLoc.distance?.let { "%.1f km".format(it) } ?: "Unknown distance"
             """
             {
-                "id": "${doctor.id}",
-                "name": "${doctor.name}",
-                "specialty": "${doctor.specialty}",
-                "rating": ${doctor.rating},
-                "fee": ${doctor.consultationFee},
-                "clinic": "${doctor.clinicName}",
-                "lat": $lat,
-                "lng": $lng
+                "id": "${docWithLoc.doctor.id}",
+                "name": "${docWithLoc.doctor.name.escapeJson()}",
+                "specialty": "${docWithLoc.doctor.specialty.escapeJson()}",
+                "rating": ${docWithLoc.doctor.rating},
+                "fee": ${docWithLoc.doctor.consultationFee.toInt()},
+                "clinic": "${docWithLoc.doctor.clinicName.escapeJson()}",
+                "address": "${docWithLoc.doctor.clinicAddress.escapeJson()}",
+                "distance": "$distanceText",
+                "lat": ${docWithLoc.lat},
+                "lng": ${docWithLoc.lng}
             }
             """.trimIndent()
         }.joinToString(",")
@@ -282,15 +410,19 @@ class MapFragment : Fragment() {
     }
     
     private fun showDoctorInfo(doctorId: String) {
-        val doctor = doctors.find { it.id == doctorId }
-        if (doctor != null && _binding != null) {
+        val doctorWithLoc = doctorsWithLocation.find { it.doctor.id == doctorId }
+        if (doctorWithLoc != null && _binding != null) {
+            val doctor = doctorWithLoc.doctor
             binding.cardSelectedDoctor.visibility = View.VISIBLE
             binding.tvSelectedDoctorName.text = doctor.name
             binding.tvSelectedDoctorSpecialty.text = doctor.specialty
             
-            val doctorLat = userLatitude + 0.01 // Sample location
-            val doctorLng = userLongitude + 0.01
-            val distance = calculateDistance(userLatitude, userLongitude, doctorLat, doctorLng)
+            val distance = doctorWithLoc.distance ?: calculateDistance(
+                userLatitude, 
+                userLongitude, 
+                doctorWithLoc.lat, 
+                doctorWithLoc.lng
+            )
             binding.tvSelectedDoctorDistance.text = "%.1f km away".format(distance)
             
             binding.btnBookAppointment.setOnClickListener {

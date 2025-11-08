@@ -1,17 +1,18 @@
 package com.example.healbridge.ui.booking
 
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.healbridge.api.ApiRepository
 import com.example.healbridge.data.NetworkResult
 import com.example.healbridge.data.models.*
 import kotlinx.coroutines.launch
 
-class BookingViewModel : ViewModel() {
+class BookingViewModel(application: Application) : AndroidViewModel(application) {
     
-    private val apiRepository = ApiRepository()
+    private val apiRepository = ApiRepository(application.applicationContext)
     
     private val _currentStep = MutableLiveData(0)
     val currentStep: LiveData<Int> = _currentStep
@@ -59,6 +60,9 @@ class BookingViewModel : ViewModel() {
     var duration: String = ""
     var visitType: String = "CLINIC"
     var notes: String = ""
+    private var _houseVisitAddress: String? = null // Address for HOUSE visits
+    
+    fun getHouseVisitAddress(): String? = _houseVisitAddress
     
     // Filter data
     var userLat: Double? = null
@@ -152,17 +156,39 @@ class BookingViewModel : ViewModel() {
         _canProceed.value = true
     }
     
-    private fun loadTimeSlots(doctorId: String) {
+    private fun loadTimeSlots(doctorId: String, forceRefresh: Boolean = false) {
+        val doctor = _selectedDoctor.value
+        val clinicId = doctor?.clinicId
+        if (clinicId == null || clinicId.isBlank()) {
+            _error.value = "Doctor clinic information is missing. Please select another doctor."
+            _availableSlots.value = emptyList()
+            android.util.Log.w("BookingViewModel", "Cannot load slots: clinicId is null or blank for doctor $doctorId")
+            return
+        }
+        
         val date = _selectedDate.value ?: getCurrentDate()
         viewModelScope.launch {
             _isLoading.value = true
-            when (val result = apiRepository.getDoctorSlots(doctorId, date)) {
+            _error.value = null
+            
+            android.util.Log.d("BookingViewModel", "Loading slots for doctor=$doctorId, clinic=$clinicId, date=$date, forceRefresh=$forceRefresh")
+            
+            when (val result = apiRepository.getDoctorSlots(doctorId, clinicId, date, useCache = !forceRefresh)) {
                 is NetworkResult.Success -> {
                     _availableSlots.value = result.data
+                    android.util.Log.d("BookingViewModel", "Loaded ${result.data.size} slots")
+                    if (result.data.isEmpty()) {
+                        _error.value = "No available slots for this date. The doctor may not have schedule blocks configured, or all slots are booked. Please try another date."
+                        android.util.Log.w("BookingViewModel", "No slots available for doctor $doctorId on $date - check if doctor has schedule blocks")
+                    } else {
+                        _error.value = null // Clear any previous errors
+                    }
                 }
                 is NetworkResult.Error -> {
-                    _error.value = result.message
+                    val errorMsg = parseErrorMessage(result.message ?: "Failed to load time slots")
+                    _error.value = errorMsg
                     _availableSlots.value = emptyList()
+                    android.util.Log.e("BookingViewModel", "Error loading slots: $errorMsg")
                 }
                 is NetworkResult.Loading -> {
                     // Handle loading
@@ -172,26 +198,46 @@ class BookingViewModel : ViewModel() {
         }
     }
     
+    fun refreshSlots() {
+        _selectedDoctor.value?.let { doctor ->
+            loadTimeSlots(doctor.id, forceRefresh = true)
+        }
+    }
+    
     fun selectTimeSlot(slot: TimeSlot) {
         _selectedSlot.value = slot
         _canProceed.value = true
     }
     
-    fun selectDate(date: String) {
+    fun selectDate(date: String, forceRefresh: Boolean = false) {
         _selectedDate.value = date
         _selectedSlot.value = null
-        _selectedDoctor.value?.let { loadTimeSlots(it.id) }
+        _selectedDoctor.value?.let { doctor ->
+            loadTimeSlots(doctor.id, forceRefresh = forceRefresh)
+        }
     }
     
     private fun createSlotHold() {
-        val doctor = _selectedDoctor.value ?: return
-        val slot = _selectedSlot.value ?: return
+        val doctor = _selectedDoctor.value ?: run {
+            _error.value = "Doctor not selected. Please go back and select a doctor."
+            return
+        }
+        val slot = _selectedSlot.value ?: run {
+            _error.value = "Time slot not selected. Please select a time slot."
+            return
+        }
+        val clinicId = doctor.clinicId
+        if (clinicId.isBlank()) {
+            _error.value = "Doctor clinic information is missing. Please select another doctor."
+            return
+        }
         
         viewModelScope.launch {
             _isLoading.value = true
+            _error.value = null
             val request = SlotHoldRequest(
                 doctorId = doctor.id,
-                clinicId = "default", // You might need to get this from doctor data
+                clinicId = clinicId,
                 startTs = slot.startTs,
                 endTs = slot.endTs
             )
@@ -206,7 +252,13 @@ class BookingViewModel : ViewModel() {
                     _currentStep.value = 3
                 }
                 is NetworkResult.Error -> {
-                    _error.value = result.message
+                    _error.value = parseErrorMessage(result.message ?: "Failed to hold slot")
+                    // If slot is already booked, refresh available slots
+                    if (result.message?.contains("already booked", ignoreCase = true) == true ||
+                        result.message?.contains("currently held", ignoreCase = true) == true) {
+                        // Refresh slots to show updated availability
+                        loadTimeSlots(doctor.id)
+                    }
                 }
                 is NetworkResult.Loading -> {
                     // Handle loading
@@ -216,16 +268,54 @@ class BookingViewModel : ViewModel() {
         }
     }
     
-    private fun confirmBooking() {
-        val hold = _slotHold.value ?: return
+    fun confirmBooking() {
+        val hold = _slotHold.value ?: run {
+            _error.value = "Slot hold not found. Please select a time slot again."
+            return
+        }
+        
+        // Validate hold hasn't expired
+        val expiresAt = try {
+            java.time.Instant.parse(hold.expiresAt).toEpochMilli()
+        } catch (e: Exception) {
+            _error.value = "Invalid hold expiration time. Please select a new slot."
+            return
+        }
+        
+        val now = System.currentTimeMillis()
+        if (now >= expiresAt) {
+            _error.value = "Slot hold has expired. Please select a new time slot."
+            _slotHold.value = null
+            _selectedSlot.value = null
+            // Go back to time slot selection
+            _currentStep.value = 2
+            _selectedDoctor.value?.let { loadTimeSlots(it.id) }
+            return
+        }
+        
+        // Validate address for HOUSE visits
+        if (visitType == "HOUSE" && (_houseVisitAddress.isNullOrBlank())) {
+            _error.value = "Please provide an address for home visit."
+            return
+        }
         
         viewModelScope.launch {
             _isLoading.value = true
+            _error.value = null
+            
+            val doctor = _selectedDoctor.value
+            val baseFee = doctor?.consultationFee ?: 500.0
+            val fee = when (visitType) {
+                "HOUSE" -> baseFee + 200 // Add home visit charge
+                "TELE" -> baseFee - 100  // Discount for telemedicine
+                else -> baseFee
+            }
+            
             val request = ConfirmAppointmentRequest(
                 holdId = hold.holdId,
                 visitType = visitType,
-                address = if (visitType == "HOUSE") "Default Address" else null,
-                feeMock = 500.0
+                address = if (visitType == "HOUSE") _houseVisitAddress else null,
+                feeMock = fee
             )
             
             when (val result = apiRepository.confirmAppointment(request)) {
@@ -234,16 +324,78 @@ class BookingViewModel : ViewModel() {
                         success = result.data.success,
                         appointment = result.data.appointment
                     )
-                    // Navigate to success screen or finish activity
+                    // Clear hold after successful booking
+                    _slotHold.value = null
                 }
                 is NetworkResult.Error -> {
-                    _error.value = result.message
+                    val errorMsg = result.message ?: "Failed to confirm appointment"
+                    _error.value = parseErrorMessage(errorMsg)
+                    
+                    // Handle specific error cases
+                    if (errorMsg.contains("expired", ignoreCase = true)) {
+                        _slotHold.value = null
+                        _selectedSlot.value = null
+                        _currentStep.value = 2
+                        _selectedDoctor.value?.let { loadTimeSlots(it.id) }
+                    } else if (errorMsg.contains("booked by another user", ignoreCase = true) ||
+                               errorMsg.contains("slot was booked", ignoreCase = true)) {
+                        _slotHold.value = null
+                        _selectedSlot.value = null
+                        _currentStep.value = 2
+                        _selectedDoctor.value?.let { loadTimeSlots(it.id) }
+                    }
                 }
                 is NetworkResult.Loading -> {
                     // Handle loading
                 }
             }
             _isLoading.value = false
+        }
+    }
+    
+    // Helper function to parse and format error messages
+    private fun parseErrorMessage(error: String): String {
+        return when {
+            error.contains("already booked", ignoreCase = true) -> 
+                "This slot was just booked by another user. Please select a different time."
+            error.contains("currently held", ignoreCase = true) -> 
+                "This slot is currently being reserved. Please select another time."
+            error.contains("expired", ignoreCase = true) -> 
+                "The slot reservation has expired. Please select a new time slot."
+            error.contains("not found", ignoreCase = true) -> 
+                "Slot hold not found. Please select a time slot again."
+            error.contains("belongs to another user", ignoreCase = true) -> 
+                "This slot reservation belongs to another user. Please select a new slot."
+            error.contains("booked by another user", ignoreCase = true) -> 
+                "This slot was booked by another user while you were confirming. Please select a different time."
+            error.contains("Unauthorized", ignoreCase = true) -> 
+                "Your session has expired. Please log in again."
+            else -> error
+        }
+    }
+    
+    fun setHouseVisitAddress(address: String?) {
+        _houseVisitAddress = address
+    }
+    
+    fun refreshSlotHoldIfNeeded() {
+        val hold = _slotHold.value ?: return
+        val expiresAt = try {
+            java.time.Instant.parse(hold.expiresAt).toEpochMilli()
+        } catch (e: Exception) {
+            return
+        }
+        
+        val now = System.currentTimeMillis()
+        val timeRemaining = (expiresAt - now) / 1000
+        
+        // If less than 30 seconds remaining, refresh the hold by going back to slot selection
+        if (timeRemaining < 30) {
+            _error.value = "Slot hold is about to expire. Please select a new time slot."
+            _slotHold.value = null
+            _selectedSlot.value = null
+            _currentStep.value = 2
+            _selectedDoctor.value?.let { loadTimeSlots(it.id) }
         }
     }
     

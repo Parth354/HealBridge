@@ -208,7 +208,21 @@ class PatientController {
       const { date } = req.query;
 
       if (!date) {
-        return res.status(400).json({ error: 'Date is required' });
+        return res.status(400).json({ error: 'Date is required', code: 'DATE_REQUIRED' });
+      }
+
+      if (!doctorId) {
+        return res.status(400).json({ error: 'Doctor ID is required', code: 'DOCTOR_ID_REQUIRED' });
+      }
+
+      if (!clinicId) {
+        return res.status(400).json({ error: 'Clinic ID is required', code: 'CLINIC_ID_REQUIRED' });
+      }
+
+      // Validate date format (YYYY-MM-DD)
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(date)) {
+        return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD', code: 'INVALID_DATE_FORMAT' });
       }
 
       const availability = await doctorService.getDoctorAvailability(
@@ -216,10 +230,22 @@ class PatientController {
         clinicId,
         date
       );
+      
+      // Ensure response always has availableSlots array (even if empty)
+      if (!availability.availableSlots) {
+        availability.availableSlots = [];
+      }
+      
       res.json(availability);
     } catch (error) {
       console.error('Get availability error:', error);
-      res.status(500).json({ error: error.message });
+      
+      // Handle specific errors
+      if (error.message?.includes('not found') || error.message?.includes('does not exist')) {
+        return res.status(404).json({ error: error.message, code: 'NOT_FOUND' });
+      }
+      
+      res.status(500).json({ error: error.message || 'Internal server error', code: 'INTERNAL_ERROR' });
     }
   }
 

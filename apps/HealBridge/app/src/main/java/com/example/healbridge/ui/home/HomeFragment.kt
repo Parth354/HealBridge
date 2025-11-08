@@ -10,7 +10,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.healbridge.databinding.FragmentHomeBinding
 import com.example.healbridge.ui.search.DoctorSearchActivity
+import com.example.healbridge.SecurePreferences
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -21,6 +23,8 @@ class HomeFragment : Fragment() {
     
     private lateinit var viewModel: HomeViewModel
     private lateinit var appointmentsAdapter: HomeAppointmentsAdapter
+    private val firestore = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
     
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -42,8 +46,13 @@ class HomeFragment : Fragment() {
         observeViewModel()
         
         // Load data
-        viewModel.loadUserProfile()
         viewModel.loadUpcomingAppointments()
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        // Refresh user name when fragment resumes (in case profile was updated)
+        loadUserNameFromFirebase()
     }
     
     private fun setupUI() {
@@ -57,9 +66,47 @@ class HomeFragment : Fragment() {
         }
         binding.greetingText.text = greeting
         
-        // Set user name from Firebase
-        val currentUser = FirebaseAuth.getInstance().currentUser
-        binding.userNameText.text = currentUser?.displayName ?: "User"
+        // Load user name from Firebase Firestore
+        loadUserNameFromFirebase()
+    }
+    
+    private fun loadUserNameFromFirebase() {
+        val uid = SecurePreferences.getUserId(requireContext()) ?: auth.currentUser?.uid
+        if (uid != null) {
+            binding.userNameText.text = "Loading..."
+            
+            firestore.collection("users").document(uid).get()
+                .addOnSuccessListener { document ->
+                    if (_binding != null) {
+                        if (document.exists()) {
+                            val firstName = document.getString("firstName") ?: ""
+                            val lastName = document.getString("lastName") ?: ""
+                            val fullName = "$firstName $lastName".trim()
+                            
+                            // Use firstName if available, otherwise use fullName, otherwise fallback
+                            binding.userNameText.text = when {
+                                firstName.isNotEmpty() -> firstName
+                                fullName.isNotEmpty() -> fullName
+                                else -> "User"
+                            }
+                        } else {
+                            // User document doesn't exist, try to get from Firebase Auth
+                            val currentUser = auth.currentUser
+                            binding.userNameText.text = currentUser?.displayName ?: "User"
+                        }
+                    }
+                }
+                .addOnFailureListener { exception ->
+                    android.util.Log.e("HomeFragment", "Failed to load user name: ${exception.message}")
+                    if (_binding != null) {
+                        // Fallback to Firebase Auth displayName
+                        val currentUser = auth.currentUser
+                        binding.userNameText.text = currentUser?.displayName ?: "User"
+                    }
+                }
+        } else {
+            binding.userNameText.text = "User"
+        }
     }
     
     private fun setupRecyclerView() {
@@ -98,12 +145,8 @@ class HomeFragment : Fragment() {
     }
     
     private fun observeViewModel() {
-        viewModel.userProfile.observe(viewLifecycleOwner) { profile ->
-            profile?.let {
-                val firstName = it.profile.firstName ?: "User"
-                binding.userNameText.text = firstName
-            }
-        }
+        // User profile is now loaded directly from Firestore in setupUI()
+        // No need to observe viewModel.userProfile anymore
         
         viewModel.upcomingAppointments.observe(viewLifecycleOwner) { appointments ->
             appointmentsAdapter.submitList(appointments.map { appointmentDetail ->
@@ -122,8 +165,7 @@ class HomeFragment : Fragment() {
                     notes = null
                 )
             })
-            
-            // Show/hide empty state
+
             if (appointments.isEmpty()) {
                 binding.upcomingAppointmentsRecycler.visibility = View.GONE
                 // Could add empty state view here

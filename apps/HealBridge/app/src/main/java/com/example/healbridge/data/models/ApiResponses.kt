@@ -72,17 +72,28 @@ data class SlotHoldResponse(
     val expiresInSeconds: Int
 )
 
-// Availability Response
+// Availability Response - matches backend format
 data class AvailabilityResponse(
     val date: String,
-    val slots: List<TimeSlotInfo>
+    val doctorId: String? = null,
+    val clinicId: String? = null,
+    val totalSlots: Int? = null,
+    val availableSlots: List<TimeSlotInfo>, // Backend returns availableSlots
+    val bookedCount: Int? = null,
+    // Legacy field for backwards compatibility
+    val slots: List<TimeSlotInfo>? = null
 )
 
 data class TimeSlotInfo(
     val startTs: String,
     val endTs: String,
-    val isAvailable: Boolean
-)
+    val available: Boolean = true, // Backend uses "available" field
+    // Legacy field for backwards compatibility
+    val isAvailable: Boolean = true
+) {
+    // Helper to get availability status (supports both field names)
+    fun getIsAvailable(): Boolean = isAvailable && available
+}
 
 // Wait Time Response
 data class WaitTimeResponse(

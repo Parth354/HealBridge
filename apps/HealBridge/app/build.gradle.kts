@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
+    kotlin("plugin.serialization") version "2.2.21"
 }
 
 android {
@@ -98,6 +99,22 @@ dependencies {
 
     implementation(libs.firebase.appcheck.debug)
     implementation(libs.play.services.location)
+
+    // Supabase SDK
+    implementation(libs.supabase.postgrest)
+    implementation(libs.supabase.storage)
+    implementation(libs.supabase.functions)
+    implementation(libs.supabase.realtime)
+    implementation(libs.supabase.gotrue)
+    implementation(libs.kotlinx.serialization.json)
+    
+    // Ktor for Supabase SDK (version 2.3.12 for compatibility with Supabase SDK 2.6.0)
+    implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.client.logging)
+    implementation(libs.ktor.client.auth)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

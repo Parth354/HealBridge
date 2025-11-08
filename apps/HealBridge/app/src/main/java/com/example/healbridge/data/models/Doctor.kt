@@ -9,6 +9,7 @@ data class Doctor(
     val experience: Int,
     val rating: Double,
     val profileImage: String?,
+    val clinicId: String, // Required for booking API
     val clinicName: String,
     val clinicAddress: String,
     val consultationFee: Double,

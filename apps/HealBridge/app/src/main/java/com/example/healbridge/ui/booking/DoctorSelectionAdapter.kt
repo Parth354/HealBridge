@@ -28,7 +28,7 @@ class DoctorSelectionAdapter(
         holder.bind(getItem(position))
     }
     
-    fun setSelectedDoctor(doctorId: String) {
+    fun setSelectedDoctor(doctorId: String?) {
         selectedDoctorId = doctorId
         notifyDataSetChanged()
     }

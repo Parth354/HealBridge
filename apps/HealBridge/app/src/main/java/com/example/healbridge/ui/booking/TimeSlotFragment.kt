@@ -45,6 +45,21 @@ class TimeSlotFragment : Fragment() {
         binding.selectedDate.text = formatDate(today)
     }
     
+    override fun onResume() {
+        super.onResume()
+        // Refresh slots when fragment becomes visible (uses cache if available)
+        viewModel.selectedDoctor.value?.let { doctor ->
+            viewModel.selectedDate.value?.let { date ->
+                // Trigger slot refresh by selecting date again (will use cache if valid)
+                viewModel.selectDate(date, forceRefresh = false)
+            } ?: run {
+                // If no date selected, set today's date
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                viewModel.selectDate(today)
+            }
+        }
+    }
+    
     private fun setupUI() {
         binding.selectDateButton.setOnClickListener {
             showDatePicker()
@@ -96,6 +111,14 @@ class TimeSlotFragment : Fragment() {
         
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
             binding.loadingProgress.visibility = if (isLoading) View.VISIBLE else View.GONE
+        }
+        
+        viewModel.error.observe(viewLifecycleOwner) { error ->
+            error?.let {
+                android.util.Log.e("TimeSlotFragment", "Error: $it")
+                // Error is already displayed through the ViewModel's error LiveData
+                // Could show a snackbar or toast here if needed
+            }
         }
     }
     

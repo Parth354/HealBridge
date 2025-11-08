@@ -76,16 +76,29 @@ class DoctorService {
       // Find next available slot
       const nextSlots = this.getNextAvailableSlots(doctor.schedules, 3);
 
+      // Get doctor name from Doctor model (firstName/lastName) or fallback to user email
+      const doctorName = (doctor.firstName && doctor.lastName) 
+        ? `${doctor.firstName} ${doctor.lastName}`.trim()
+        : (doctor.firstName || doctor.lastName || doctor.user?.email?.split('@')[0] || 'Dr. Unknown');
+      
       return {
         doctorId: doctor.id,
         userId: doctor.user_id,
+        firstName: doctor.firstName || '',
+        lastName: doctor.lastName || '',
+        name: doctorName,
         specialties: doctor.specialties,
         rating: doctor.rating,
         avgConsultMin: doctor.avgConsultMin,
         clinics: clinicsWithDistance,
         nearestClinic: clinicsWithDistance[0],
         nextSlots,
-        nextAvailable: nextSlots[0]?.startTs || null
+        nextAvailable: nextSlots[0]?.startTs || null,
+        user: doctor.user ? {
+          email: doctor.user.email || '',
+          phone: doctor.user.phone || '',
+          language: doctor.user.language || 'en'
+        } : null
       };
     }).filter(Boolean);
 
@@ -113,78 +126,123 @@ class DoctorService {
 
   // Get doctor availability for a specific date
   async getDoctorAvailability(doctorId, clinicId, date) {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // Get work schedule blocks
-    const scheduleBlocks = await prisma.scheduleBlock.findMany({
-      where: {
-        doctor_id: doctorId,
-        clinic_id: clinicId,
-        type: 'work',
-        startTs: { gte: startOfDay },
-        endTs: { lte: endOfDay }
-      },
-      orderBy: { startTs: 'asc' }
-    });
-
-    // Get existing appointments
-    const appointments = await prisma.appointment.findMany({
-      where: {
-        doctor_id: doctorId,
-        clinic_id: clinicId,
-        startTs: { gte: startOfDay, lte: endOfDay },
-        status: { in: ['CONFIRMED', 'STARTED'] }
+    try {
+      // Validate inputs
+      if (!doctorId || !clinicId || !date) {
+        throw new Error('Doctor ID, Clinic ID, and date are required');
       }
-    });
 
-    // Get active slot holds
-    const holds = await prisma.slotHold.findMany({
-      where: {
-        doctor_id: doctorId,
-        clinic_id: clinicId,
-        startTs: { gte: startOfDay, lte: endOfDay },
-        status: 'active',
-        ttlExpiresAt: { gte: new Date() }
+      // Verify doctor exists
+      const doctor = await prisma.doctor.findUnique({
+        where: { id: doctorId }
+      });
+
+      if (!doctor) {
+        throw new Error(`Doctor with ID ${doctorId} not found`);
       }
-    });
 
-    // Generate available slots
-    const slots = [];
-    const bookedTimes = new Set([
-      ...appointments.map(a => a.startTs.toISOString()),
-      ...holds.map(h => h.startTs.toISOString())
-    ]);
-
-    for (const block of scheduleBlocks) {
-      let currentTime = new Date(block.startTs);
-      const blockEnd = new Date(block.endTs);
-      const slotDuration = block.slotMinutes * 60 * 1000;
-
-      while (currentTime < blockEnd) {
-        const slotEnd = new Date(currentTime.getTime() + slotDuration);
-        if (slotEnd <= blockEnd && !bookedTimes.has(currentTime.toISOString())) {
-          slots.push({
-            startTs: new Date(currentTime),
-            endTs: slotEnd,
-            available: true
-          });
+      // Verify clinic exists and belongs to doctor
+      const clinic = await prisma.clinic.findFirst({
+        where: {
+          id: clinicId,
+          doctor_id: doctorId
         }
-        currentTime = new Date(currentTime.getTime() + slotDuration + (block.bufferMinutes * 60 * 1000));
-      }
-    }
+      });
 
-    return {
-      date,
-      doctorId,
-      clinicId,
-      totalSlots: slots.length,
-      availableSlots: slots,
-      bookedCount: appointments.length
-    };
+      if (!clinic) {
+        throw new Error(`Clinic with ID ${clinicId} not found for doctor ${doctorId}`);
+      }
+
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Get work schedule blocks
+      const scheduleBlocks = await prisma.scheduleBlock.findMany({
+        where: {
+          doctor_id: doctorId,
+          clinic_id: clinicId,
+          type: 'work',
+          startTs: { gte: startOfDay },
+          endTs: { lte: endOfDay }
+        },
+        orderBy: { startTs: 'asc' }
+      });
+
+      console.log(`Found ${scheduleBlocks.length} schedule blocks for doctor ${doctorId} at clinic ${clinicId} on ${date}`);
+
+      // Get existing appointments
+      const appointments = await prisma.appointment.findMany({
+        where: {
+          doctor_id: doctorId,
+          clinic_id: clinicId,
+          startTs: { gte: startOfDay, lte: endOfDay },
+          status: { in: ['CONFIRMED', 'STARTED'] }
+        }
+      });
+
+      // Get active slot holds
+      const holds = await prisma.slotHold.findMany({
+        where: {
+          doctor_id: doctorId,
+          clinic_id: clinicId,
+          startTs: { gte: startOfDay, lte: endOfDay },
+          status: 'active',
+          ttlExpiresAt: { gte: new Date() }
+        }
+      });
+
+      // Generate available slots
+      const slots = [];
+      const bookedTimes = new Set([
+        ...appointments.map(a => a.startTs.toISOString()),
+        ...holds.map(h => h.startTs.toISOString())
+      ]);
+
+      const now = new Date();
+
+      for (const block of scheduleBlocks) {
+        let currentTime = new Date(block.startTs);
+        const blockEnd = new Date(block.endTs);
+        const slotDuration = block.slotMinutes * 60 * 1000;
+
+        while (currentTime < blockEnd) {
+          const slotEnd = new Date(currentTime.getTime() + slotDuration);
+          
+          // Only include slots that:
+          // 1. Fit within the block
+          // 2. Are not booked
+          // 3. Are not in the past
+          if (slotEnd <= blockEnd && 
+              !bookedTimes.has(currentTime.toISOString()) && 
+              currentTime > now) {
+            slots.push({
+              startTs: currentTime.toISOString(),
+              endTs: slotEnd.toISOString(),
+              available: true
+            });
+          }
+          currentTime = new Date(currentTime.getTime() + slotDuration + (block.bufferMinutes * 60 * 1000));
+        }
+      }
+
+      console.log(`Generated ${slots.length} available slots (${appointments.length} booked, ${holds.length} held)`);
+
+      return {
+        date,
+        doctorId,
+        clinicId,
+        totalSlots: slots.length,
+        availableSlots: slots,
+        bookedCount: appointments.length,
+        hasScheduleBlocks: scheduleBlocks.length > 0
+      };
+    } catch (error) {
+      console.error('Error in getDoctorAvailability:', error);
+      throw error;
+    }
   }
 
   // Helper to get next N available slots from schedule blocks

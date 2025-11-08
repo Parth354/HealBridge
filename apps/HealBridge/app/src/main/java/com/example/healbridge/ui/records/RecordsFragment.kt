@@ -15,9 +15,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.example.healbridge.api.SupabaseClient
 import com.example.healbridge.databinding.FragmentRecordsBinding
-import com.example.healbridge.getUserId
+import com.example.healbridge.SecurePreferences
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 class RecordsFragment : Fragment() {
@@ -27,6 +29,9 @@ class RecordsFragment : Fragment() {
     private lateinit var supabaseClient: SupabaseClient
     private val records = mutableListOf<MedicalRecord>()
     private var isUploading = false
+    private var currentPage = 1
+    private var isLoading = false
+    private var hasMorePages = true
     
     private val documentPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -61,9 +66,26 @@ class RecordsFragment : Fragment() {
         recordsAdapter = RecordsAdapter(records) { record ->
             showRecordDetails(record)
         }
+        val layoutManager = LinearLayoutManager(context)
         binding.rvRecords.apply {
-            layoutManager = LinearLayoutManager(context)
+            this.layoutManager = layoutManager
             adapter = recordsAdapter
+            
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                    super.onScrolled(recyclerView, dx, dy)
+                    
+                    val visibleItemCount = layoutManager.childCount
+                    val totalItemCount = layoutManager.itemCount
+                    val firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition()
+                    
+                    if (!isLoading && hasMorePages) {
+                        if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount - 2) {
+                            loadMoreRecords()
+                        }
+                    }
+                }
+            })
         }
     }
     
@@ -123,7 +145,7 @@ class RecordsFragment : Fragment() {
     private fun uploadDocument(uri: Uri) {
         if (isUploading) return
         
-        val uid = getUserId(requireContext())
+        val uid = SecurePreferences.getUserId(requireContext()) ?: FirebaseAuth.getInstance().currentUser?.uid
         if (uid == null) {
             Toast.makeText(context, "User not authenticated", Toast.LENGTH_SHORT).show()
             return
@@ -145,6 +167,8 @@ class RecordsFragment : Fragment() {
                 onSuccess = { response ->
                     if (response.success) {
                         Toast.makeText(context, "Document uploaded successfully!", Toast.LENGTH_SHORT).show()
+                        currentPage = 1
+                        hasMorePages = true
                         loadRecords()
                     } else {
                         Toast.makeText(context, "Upload failed: ${response.ocrError}", Toast.LENGTH_LONG).show()
@@ -166,54 +190,79 @@ class RecordsFragment : Fragment() {
     }
     
     private fun loadRecords() {
-        val uid = getUserId(requireContext())
-        if (uid != null) {
-            lifecycleScope.launch {
-                val result = supabaseClient.getPatientSummary(uid)
+        val uid = SecurePreferences.getUserId(requireContext()) ?: FirebaseAuth.getInstance().currentUser?.uid
+        if (uid == null) {
+            android.util.Log.e("RecordsFragment", "User ID is null, cannot load documents")
+            Toast.makeText(context, "User not authenticated", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        if (isLoading) {
+            android.util.Log.d("RecordsFragment", "Already loading, skipping...")
+            return
+        }
+        
+        android.util.Log.d("RecordsFragment", "Loading documents for user: $uid, page: $currentPage")
+        isLoading = true
+        
+        lifecycleScope.launch {
+            try {
+                val result = supabaseClient.getDocuments(uid, currentPage, 10)
                 
                 result.fold(
                     onSuccess = { response ->
-                        if (response.success && response.summary != null) {
-                            val medRecords = mutableListOf<MedicalRecord>()
-                            
-                            // Add current medications as records
-                            response.summary.currentMedications.forEachIndexed { index, med ->
-                                medRecords.add(
-                                    MedicalRecord(
-                                        id = "med_$index",
-                                        title = med.name,
-                                        type = "Current Medication",
-                                        date = "Ongoing",
-                                        description = "${med.strength} - ${med.frequency}"
-                                    )
+                        android.util.Log.d("RecordsFragment", "Documents loaded: success=${response.success}, count=${response.documents.size}, total=${response.totalCount}")
+                        
+                        if (response.success) {
+                            val medRecords = response.documents.map { doc ->
+                                MedicalRecord(
+                                    id = doc.id,
+                                    title = getDocumentTitle(doc),
+                                    type = doc.type.replaceFirstChar { it.uppercaseChar() },
+                                    date = formatDate(doc.createdAt),
+                                    description = getDocumentDescription(doc),
+                                    fileUrl = doc.fileUrl,
+                                    extractedText = doc.text
                                 )
                             }
                             
-                            // Add visit history as records
-                            response.summary.visitHistory.forEachIndexed { index, visit ->
-                                medRecords.add(
-                                    MedicalRecord(
-                                        id = "visit_$index",
-                                        title = "${visit.type} - ${visit.clinic}",
-                                        type = "Visit",
-                                        date = visit.date,
-                                        description = "Prescriptions: ${visit.prescriptionsCount}"
-                                    )
-                                )
+                            if (currentPage == 1) {
+                                records.clear()
                             }
-                            
-                            records.clear()
                             records.addAll(medRecords)
                             recordsAdapter.notifyDataSetChanged()
+                            
+                            hasMorePages = currentPage < response.totalPages
+                            updateStatistics(response.totalCount)
+                            
+                            android.util.Log.d("RecordsFragment", "Updated UI: ${records.size} records displayed, hasMorePages=$hasMorePages")
                         } else {
-                            showSampleData()
+                            android.util.Log.w("RecordsFragment", "Response indicates failure but no error message")
+                            if (response.documents.isEmpty()) {
+                                Toast.makeText(context, "No documents found", Toast.LENGTH_SHORT).show()
+                            }
                         }
+                        updateEmptyState()
                     },
-                    onFailure = { error ->
-                        Toast.makeText(context, "Error loading records: ${error.message}", Toast.LENGTH_SHORT).show()
-                        showSampleData()
-                    }
+                        onFailure = { error ->
+                            android.util.Log.e("RecordsFragment", "Error loading documents: ${error.message}", error)
+                            android.util.Log.e("RecordsFragment", "Error type: ${error.javaClass.simpleName}")
+                            android.util.Log.e("RecordsFragment", "Stack trace: ${error.stackTraceToString()}")
+                            // Check if fragment is still attached before showing Toast
+                            if (isAdded && context != null) {
+                                Toast.makeText(context, "Error loading documents: ${error.message}", Toast.LENGTH_LONG).show()
+                            }
+                            updateEmptyState()
+                        }
                 )
+            } catch (e: Exception) {
+                android.util.Log.e("RecordsFragment", "Exception in loadRecords: ${e.message}", e)
+                // Check if fragment is still attached before showing Toast
+                if (isAdded && context != null) {
+                    Toast.makeText(context, "Failed to load documents: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                isLoading = false
             }
         }
     }
@@ -231,10 +280,13 @@ class RecordsFragment : Fragment() {
         updateEmptyState()
     }
     
-    private fun updateStatistics() {
+    private fun updateStatistics(totalCount: Int = records.size) {
         if (_binding != null) {
-            binding.tvTotalRecords.text = records.size.toString()
-            binding.tvRecentUploads.text = "1" // Sample data
+            binding.tvTotalRecords.text = totalCount.toString()
+            binding.tvRecentUploads.text = records.count { 
+                val today = java.time.LocalDate.now().toString()
+                it.date == today
+            }.toString()
         }
     }
     
@@ -251,68 +303,32 @@ class RecordsFragment : Fragment() {
     }
     
     private fun showRecordDetails(record: MedicalRecord) {
-        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+        val message = buildString {
+            append("Type: ${record.type}\n")
+            append("Date: ${record.date}\n")
+            append("Description: ${record.description}\n")
+            record.extractedText?.let {
+                append("\nExtracted Text:\n$it")
+            }
+        }
+        
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle(record.title)
-            .setMessage("Type: ${record.type}\nDate: ${record.date}\nDescription: ${record.description}")
+            .setMessage(message)
             .setPositiveButton("OK", null)
-            .show()
+        
+        record.fileUrl?.let { url ->
+            dialog.setNeutralButton("View File") { _, _ ->
+                openDocument(url)
+            }
+        }
+        
+        dialog.show()
     }
     
     private fun showPatientSummary() {
-        val uid = getUserId(requireContext())
-        if (uid == null) {
-            Toast.makeText(context, "User not authenticated", Toast.LENGTH_SHORT).show()
-            return
-        }
-        
-        lifecycleScope.launch {
-            val result = supabaseClient.getPatientSummary(uid, "Generate complete medical summary")
-            
-            result.fold(
-                onSuccess = { response ->
-                    if (response.success && response.summary != null) {
-                        showSummaryDialog(response.summary)
-                    } else {
-                        Toast.makeText(context, "No summary available", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                onFailure = { error ->
-                    Toast.makeText(context, "Error loading summary: ${error.message}", Toast.LENGTH_SHORT).show()
-                }
-            )
-        }
-    }
-    
-    private fun showSummaryDialog(summary: com.example.healbridge.api.PatientSummary) {
-        val summaryText = buildString {
-            append("Patient: ${summary.patient.name}\n")
-            append("Age: ${summary.patient.age}, Gender: ${summary.patient.gender}\n\n")
-            
-            append("Medical Conditions:\n")
-            summary.medicalInfo.chronicConditions.forEach { append("• $it\n") }
-            
-            append("\nAllergies:\n")
-            summary.medicalInfo.allergies.forEach { append("• $it\n") }
-            
-            append("\nCurrent Medications:\n")
-            summary.currentMedications.forEach { 
-                append("• ${it.name} ${it.strength} - ${it.frequency}\n") 
-            }
-            
-            append("\nDocuments: ${summary.documentsSummary.total} total")
-            append(" (${summary.documentsSummary.prescriptions} prescriptions, ")
-            append("${summary.documentsSummary.labReports} lab reports)\n")
-            
-            summary.ragAnswer?.let {
-                append("\nAI Summary:\n$it")
-            }
-        }
-        
-        androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Medical Summary")
-            .setMessage(summaryText)
-            .setPositiveButton("OK", null)
-            .show()
+        val intent = android.content.Intent(requireContext(), PatientSummaryChatActivity::class.java)
+        startActivity(intent)
     }
     
     private fun filterRecords(query: String) {
@@ -321,10 +337,54 @@ class RecordsFragment : Fragment() {
         } else {
             records.filter { 
                 it.title.contains(query, ignoreCase = true) || 
-                it.description.contains(query, ignoreCase = true)
+                it.description.contains(query, ignoreCase = true) ||
+                it.extractedText?.contains(query, ignoreCase = true) == true
             }
         }
         recordsAdapter.updateRecords(filteredRecords)
+    }
+    
+    private fun getDocumentTitle(doc: com.example.healbridge.api.Document): String {
+        return when (doc.type) {
+            "pdf" -> "PDF Document"
+            "image" -> "Medical Image"
+            "prescription" -> "Prescription"
+            else -> "Medical Document"
+        }
+    }
+    
+    private fun getDocumentDescription(doc: com.example.healbridge.api.Document): String {
+        return if (doc.ocrConfidence > 0.8) {
+            "OCR Confidence: ${(doc.ocrConfidence * 100).toInt()}% - Text extracted successfully"
+        } else {
+            "OCR Confidence: ${(doc.ocrConfidence * 100).toInt()}% - May need manual review"
+        }
+    }
+    
+    private fun formatDate(dateString: String): String {
+        return try {
+            val instant = java.time.Instant.parse(dateString)
+            val date = java.time.LocalDate.ofInstant(instant, java.time.ZoneId.systemDefault())
+            date.toString()
+        } catch (e: Exception) {
+            dateString.substring(0, 10)
+        }
+    }
+    
+    private fun loadMoreRecords() {
+        if (hasMorePages && !isLoading) {
+            currentPage++
+            loadRecords()
+        }
+    }
+    
+    private fun openDocument(url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Cannot open document: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onDestroyView() {

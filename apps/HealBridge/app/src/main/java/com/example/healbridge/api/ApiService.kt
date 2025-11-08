@@ -10,7 +10,7 @@ interface ApiService {
     @GET("health")
     suspend fun healthCheck(): Response<Map<String, Any>>
     
-    // Doctor Search
+    // Doctor Search - returns backend format
     @GET("api/patient/doctors/search")
     suspend fun searchDoctors(
         @Query("specialty") specialty: String? = null,
@@ -21,7 +21,7 @@ interface ApiService {
         @Query("maxDistance") maxDistance: Int? = 50,
         @Query("minRating") minRating: Double? = 0.0,
         @Query("limit") limit: Int = 20
-    ): Response<DoctorSearchResponse>
+    ): Response<com.example.healbridge.data.models.BackendDoctorSearchResponse>
     
     // Doctor Availability
     @GET("api/patient/doctors/{doctorId}/clinics/{clinicId}/availability")

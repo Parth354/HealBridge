@@ -28,7 +28,7 @@ class AppointmentsFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        apiRepository = ApiRepository()
+        apiRepository = ApiRepository(requireContext())
         setupTabs()
         setupFAB()
         loadAppointments()

@@ -37,6 +37,17 @@ class DoctorSelectionFragment : Fragment() {
         observeViewModel()
     }
     
+    override fun onResume() {
+        super.onResume()
+        // Refresh doctors when fragment becomes visible (uses cache if available)
+        viewModel.searchDoctorsNearby()
+    }
+    
+    private fun loadDoctors() {
+        // This will be handled by viewModel.searchDoctorsNearby() in onResume
+        viewModel.searchDoctorsNearby()
+    }
+    
     private fun setupRecyclerView() {
         doctorsAdapter = DoctorSelectionAdapter { doctor ->
             viewModel.selectDoctor(doctor)
@@ -100,9 +111,7 @@ class DoctorSelectionFragment : Fragment() {
         }
         
         viewModel.selectedDoctor.observe(viewLifecycleOwner) { doctor ->
-            doctor?.let {
-                doctorsAdapter.setSelectedDoctor(it.id)
-            }
+            doctorsAdapter.setSelectedDoctor(doctor?.id)
         }
         
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
