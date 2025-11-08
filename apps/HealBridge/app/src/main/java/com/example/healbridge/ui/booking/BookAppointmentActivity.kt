@@ -21,10 +21,46 @@ class BookAppointmentActivity : AppCompatActivity() {
         
         viewModel = ViewModelProvider(this)[BookingViewModel::class.java]
         
+        // Handle intent extras if coming from map
+        handleIntentExtras()
+        
         setupToolbar()
         setupViewPager()
         setupObservers()
         setupClickListeners()
+    }
+    
+    private fun handleIntentExtras() {
+        val doctorId = intent.getStringExtra("doctor_id")
+        val doctorName = intent.getStringExtra("doctor_name")
+        val doctorSpecialty = intent.getStringExtra("doctor_specialty")
+        val clinicId = intent.getStringExtra("clinic_id")
+        val clinicName = intent.getStringExtra("clinic_name")
+        
+        if (doctorId != null) {
+            // Create a Doctor object from intent extras
+            val doctor = com.example.healbridge.data.models.Doctor(
+                id = doctorId,
+                name = doctorName ?: "Dr. Unknown",
+                specialty = doctorSpecialty ?: "General",
+                email = "",
+                phone = "",
+                experience = 0,
+                rating = 0.0,
+                profileImage = null,
+                clinicId = clinicId ?: "",
+                clinicName = clinicName ?: "Unknown Clinic",
+                clinicAddress = "",
+                consultationFee = 500.0,
+                isAvailable = true,
+                bio = ""
+            )
+            
+            // Select the doctor and skip to time slot selection
+            viewModel.selectDoctor(doctor)
+            viewModel.nextStep() // Go to doctor selection step (will show selected)
+            viewModel.nextStep() // Skip to time slot selection
+        }
     }
     
     private fun setupToolbar() {

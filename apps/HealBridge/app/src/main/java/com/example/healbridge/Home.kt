@@ -10,6 +10,9 @@ import androidx.core.view.isVisible
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
 import com.example.healbridge.databinding.ActivityHomeBinding
+import com.example.healbridge.services.AppointmentNotificationService
+import com.example.healbridge.services.NotificationScheduler
+import com.example.healbridge.api.ApiRepository
 import com.google.firebase.firestore.FirebaseFirestore
 
 class Home : AppCompatActivity() {
@@ -18,10 +21,18 @@ class Home : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Create notification channel for appointment reminders
+        AppointmentNotificationService.createNotificationChannel(this)
+        
         binding = ActivityHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         firestore = FirebaseFirestore.getInstance()
+        
+        // Schedule notifications for upcoming appointments
+        val apiRepository = ApiRepository(this)
+        NotificationScheduler.scheduleAllAppointments(this, apiRepository)
         val uid = SecurePreferences.getUserId(this)
         if (uid == null) {
             startActivity(Intent(this, Login::class.java))

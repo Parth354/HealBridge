@@ -21,6 +21,8 @@ router.post('/schedule', validate(schemas.createSchedule), doctorController.crea
 router.post('/schedule/recurring', validate(schemas.createRecurringSchedule), doctorController.createRecurringSchedule);
 router.post('/schedule/unavailable', doctorController.markUnavailable);
 router.get('/schedule', doctorController.getSchedule);
+router.put('/schedule/:blockId', doctorController.updateSchedule);
+router.delete('/schedule/:blockId', doctorController.deleteSchedule);
 
 // Appointments (temporarily allow without verification)
 router.get('/appointments', doctorController.getAppointments);

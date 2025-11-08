@@ -200,17 +200,58 @@ class PatientSummaryChatActivity : AppCompatActivity() {
                     }
 
                     if (response.success && response.summary != null) {
-                        val answer = response.summary.ragAnswer
-                        if (!answer.isNullOrBlank()) {
+                        val summary = response.summary
+                        val answer = summary.ragAnswer
+                        
+                        // Check if we have an answer or sources
+                        if (!answer.isNullOrBlank() && answer.lowercase() != "no relevant information" && answer.trim().isNotEmpty()) {
+                            // Format answer with sources if available
+                            val formattedAnswer = buildString {
+                                append(answer)
+                                
+                                // Add sources if available
+                                if (summary.ragSources.isNotEmpty()) {
+                                    append("\n\n")
+                                    append("📋 Sources:\n")
+                                    summary.ragSources.take(3).forEachIndexed { index, source ->
+                                        append("${index + 1}. ${source.docType} from ${source.date}")
+                                        if (source.similarity > 0.5) {
+                                            append(" (${(source.similarity * 100).toInt()}% match)\n")
+                                        } else {
+                                            append("\n")
+                                        }
+                                    }
+                                }
+                            }
+                            
                             addMessage(ChatMessage(
-                                text = answer,
+                                text = formattedAnswer,
+                                isUser = false,
+                                timestamp = System.currentTimeMillis(),
+                                pdfUrl = response.pdfUrl
+                            ))
+                        } else if (summary.ragSources.isNotEmpty()) {
+                            // If no answer but we have sources, show them
+                            val sourcesText = buildString {
+                                append("I found some relevant information in your records:\n\n")
+                                summary.ragSources.take(5).forEachIndexed { index, source ->
+                                    append("${index + 1}. ${source.docType} from ${source.date}\n")
+                                    if (!source.excerpt.isNullOrBlank()) {
+                                        val excerpt = source.excerpt.take(200)
+                                        append("   ${excerpt}...\n\n")
+                                    }
+                                }
+                            }
+                            addMessage(ChatMessage(
+                                text = sourcesText,
                                 isUser = false,
                                 timestamp = System.currentTimeMillis(),
                                 pdfUrl = response.pdfUrl
                             ))
                         } else {
+                            // No answer and no sources
                             addMessage(ChatMessage(
-                                text = "I couldn't find a specific answer to your question. Please try rephrasing or ask about your medications, medical history, or recent visits.",
+                                text = "I couldn't find specific information about that in your records. You can ask about:\n• Your current medications\n• Medical history\n• Recent visits\n• Allergies or chronic conditions\n\nOr try rephrasing your question.",
                                 isUser = false,
                                 timestamp = System.currentTimeMillis()
                             ))

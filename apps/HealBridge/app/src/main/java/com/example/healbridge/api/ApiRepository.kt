@@ -176,37 +176,64 @@ class ApiRepository(private val context: Context? = null) {
                 
                 val slots = slotsList
                     .filter { slotInfo ->
-                        // Filter only available slots - check both available field and isAvailable
-                        val isAvailable = slotInfo.available && slotInfo.isAvailable
-                        // Also filter out past slots
+                        // Filter only available slots - check available field (backend uses "available")
+                        // The isAvailable field might be default true, so check available first
+                        val isAvailable = slotInfo.available
+                        
+                        android.util.Log.d("ApiRepository", "Checking slot: ${slotInfo.startTs}, available=$isAvailable")
+                        
+                        // Filter out past slots
                         val slotTime = try {
                             // Handle different date formats from backend
                             val dateStr = slotInfo.startTs
-                            when {
+                            val instant = when {
                                 // ISO format: "2025-11-09T10:00:00.000Z" or "2025-11-09T10:00:00Z"
                                 dateStr.contains("T") -> {
-                                    java.time.Instant.parse(dateStr).toEpochMilli()
+                                    try {
+                                        java.time.Instant.parse(dateStr)
+                                    } catch (e: Exception) {
+                                        // Try with Z appended if missing
+                                        try {
+                                            java.time.Instant.parse("${dateStr}Z")
+                                        } catch (e2: Exception) {
+                                            // Try parsing as local datetime
+                                            java.time.LocalDateTime.parse(dateStr.substringBefore("."), java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                                                .atZone(java.time.ZoneId.systemDefault())
+                                                .toInstant()
+                                        }
+                                    }
                                 }
-                                // Try parsing as other formats
                                 else -> {
-                                    // Try to parse as ISO without Z
-                                    java.time.LocalDateTime.parse(dateStr, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                                        .atZone(java.time.ZoneId.systemDefault())
+                                    // Try to parse as date and convert to instant
+                                    java.time.LocalDate.parse(dateStr)
+                                        .atStartOfDay(java.time.ZoneId.systemDefault())
                                         .toInstant()
-                                        .toEpochMilli()
                                 }
                             }
+                            instant.toEpochMilli()
                         } catch (e: Exception) {
                             android.util.Log.w("ApiRepository", "Failed to parse slot time: ${slotInfo.startTs}", e)
-                            Long.MAX_VALUE // Include if we can't parse (shouldn't happen)
+                            // If we can't parse, include it (might be valid, just unusual format)
+                            System.currentTimeMillis() + 86400000L // Tomorrow, so it's not filtered out
                         }
-                        val isPast = slotTime < System.currentTimeMillis()
+                        
+                        val now = System.currentTimeMillis()
+                        val isPast = slotTime < now
                         
                         if (isPast) {
-                            android.util.Log.d("ApiRepository", "Filtering out past slot: ${slotInfo.startTs}")
+                            android.util.Log.d("ApiRepository", "Filtering out past slot: ${slotInfo.startTs} (${java.util.Date(slotTime)} < ${java.util.Date(now)})")
                         }
                         
-                        isAvailable && !isPast
+                        if (!isAvailable) {
+                            android.util.Log.d("ApiRepository", "Filtering out unavailable slot: ${slotInfo.startTs}")
+                        }
+                        
+                        val shouldInclude = isAvailable && !isPast
+                        if (shouldInclude) {
+                            android.util.Log.d("ApiRepository", "✅ Including slot: ${slotInfo.startTs}")
+                        }
+                        
+                        shouldInclude
                     }
                     .map { slotInfo ->
                         // Parse ISO datetime string and extract time portion

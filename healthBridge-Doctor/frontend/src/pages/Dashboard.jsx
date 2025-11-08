@@ -11,7 +11,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { useAppointments } from '../hooks/useAppointments';
-import { getStatistics, getDoctorStatus } from '../api/doctorApi';
+import { getStatistics, getDoctorStatus, getSchedule } from '../api/doctorApi';
 import AppointmentCard from '../components/AppointmentCard';
 import { AppointmentCardSkeleton } from '../components/SkeletonLoader';
 import { format } from 'date-fns';
@@ -24,6 +24,8 @@ const Dashboard = () => {
   const [statistics, setStatistics] = useState(null);
   const [doctorStatus, setDoctorStatus] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [recentSlots, setRecentSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   
   const { data: appointmentsData, isLoading } = useAppointments(selectedDate);
 
@@ -58,6 +60,38 @@ const Dashboard = () => {
 
     fetchStats();
   }, [showError]);
+
+  // Fetch recent schedule slots
+  useEffect(() => {
+    const fetchRecentSlots = async () => {
+      try {
+        setSlotsLoading(true);
+        const today = new Date();
+        const nextWeek = new Date();
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        
+        const response = await getSchedule(
+          today.toISOString().split('T')[0],
+          nextWeek.toISOString().split('T')[0]
+        );
+        
+        if (response && response.scheduleBlocks) {
+          // Get only work slots and limit to 5 most recent
+          const workSlots = response.scheduleBlocks
+            .filter(sb => sb.type === 'work')
+            .sort((a, b) => new Date(a.startTs) - new Date(b.startTs))
+            .slice(0, 5);
+          setRecentSlots(workSlots);
+        }
+      } catch (error) {
+        console.error('Failed to fetch schedule slots:', error);
+      } finally {
+        setSlotsLoading(false);
+      }
+    };
+
+    fetchRecentSlots();
+  }, []);
 
   const stats = [
     {
@@ -187,6 +221,82 @@ const Dashboard = () => {
             );
           })}
         </div>
+      </div>
+
+      {/* Recent Schedule Slots */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Recent Schedule Slots</h2>
+          <button
+            onClick={() => navigate('/schedule')}
+            className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+          >
+            View All
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {slotsLoading ? (
+          <div className="bg-white rounded-lg shadow border border-gray-200 p-8">
+            <div className="animate-pulse space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-16 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
+        ) : recentSlots.length > 0 ? (
+          <div className="space-y-3 mb-6">
+            {recentSlots.map((slot) => {
+              const startTime = new Date(slot.startTs);
+              const endTime = new Date(slot.endTs);
+              return (
+                <div
+                  key={slot.id}
+                  className="bg-white rounded-lg shadow border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-blue-100 text-blue-600 p-2 rounded-lg">
+                        <Clock className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-semibold text-gray-900">
+                          {format(startTime, 'MMM d, yyyy')}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {format(startTime, 'h:mm a')} - {format(endTime, 'h:mm a')}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Duration: {slot.slotMinutes} min
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => navigate('/schedule')}
+                      className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                    >
+                      Manage
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow border border-gray-200 p-8 text-center mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-full mb-4">
+              <Clock className="w-8 h-8 text-blue-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No schedule slots</h3>
+            <p className="text-gray-600 mb-6">Create schedule slots to allow patients to book appointments.</p>
+            <button
+              onClick={() => navigate('/schedule')}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              Create Slots
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Today's Appointments */}

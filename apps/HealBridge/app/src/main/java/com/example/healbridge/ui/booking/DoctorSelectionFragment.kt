@@ -115,7 +115,16 @@ class DoctorSelectionFragment : Fragment() {
         }
         
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
-            binding.loadingProgress.visibility = if (isLoading) View.VISIBLE else View.GONE
+            // Only show loading if doctors list is empty or loading for first time
+            if (isLoading && (viewModel.availableDoctors.value.isNullOrEmpty())) {
+                binding.loadingProgress.visibility = View.VISIBLE
+                binding.doctorsRecyclerView.visibility = View.GONE
+            } else {
+                binding.loadingProgress.visibility = View.GONE
+                if (!viewModel.availableDoctors.value.isNullOrEmpty()) {
+                    binding.doctorsRecyclerView.visibility = View.VISIBLE
+                }
+            }
         }
     }
     

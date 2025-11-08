@@ -304,11 +304,25 @@ class RecordsFragment : Fragment() {
     
     private fun showRecordDetails(record: MedicalRecord) {
         val message = buildString {
+            append("📄 ${record.title}\n\n")
             append("Type: ${record.type}\n")
-            append("Date: ${record.date}\n")
-            append("Description: ${record.description}\n")
-            record.extractedText?.let {
-                append("\nExtracted Text:\n$it")
+            append("Date: ${record.date}\n\n")
+            append("Details:\n${record.description}\n")
+            
+            record.extractedText?.let { text ->
+                if (text.isNotBlank()) {
+                    append("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+                    append("Extracted Text:\n")
+                    append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+                    // Format text better - limit length and add line breaks
+                    val formattedText = text.take(1000)
+                        .replace("\\n", "\n")
+                        .replace("  ", " ")
+                    append(formattedText)
+                    if (text.length > 1000) {
+                        append("\n\n... (text truncated, view full file for complete content)")
+                    }
+                }
             }
         }
         
@@ -318,7 +332,7 @@ class RecordsFragment : Fragment() {
             .setPositiveButton("OK", null)
         
         record.fileUrl?.let { url ->
-            dialog.setNeutralButton("View File") { _, _ ->
+            dialog.setNeutralButton("View Full File") { _, _ ->
                 openDocument(url)
             }
         }
@@ -345,29 +359,56 @@ class RecordsFragment : Fragment() {
     }
     
     private fun getDocumentTitle(doc: com.example.healbridge.api.Document): String {
-        return when (doc.type) {
-            "pdf" -> "PDF Document"
-            "image" -> "Medical Image"
-            "prescription" -> "Prescription"
-            else -> "Medical Document"
+        // Try to extract meaningful title from file name or text
+        val fileName = doc.fileUrl?.substringAfterLast("/")?.substringBefore("?") ?: ""
+        return when {
+            fileName.contains("prescription", ignoreCase = true) -> "Prescription - ${formatDate(doc.createdAt)}"
+            fileName.contains("lab", ignoreCase = true) || fileName.contains("report", ignoreCase = true) -> "Lab Report - ${formatDate(doc.createdAt)}"
+            doc.type == "prescription" -> "Prescription - ${formatDate(doc.createdAt)}"
+            doc.type == "image" -> "Medical Document - ${formatDate(doc.createdAt)}"
+            doc.type == "pdf" -> "PDF Document - ${formatDate(doc.createdAt)}"
+            fileName.isNotEmpty() -> fileName.substringBeforeLast(".").replace("_", " ").replace("-", " ")
+            else -> "Medical Document - ${formatDate(doc.createdAt)}"
         }
     }
     
     private fun getDocumentDescription(doc: com.example.healbridge.api.Document): String {
-        return if (doc.ocrConfidence > 0.8) {
-            "OCR Confidence: ${(doc.ocrConfidence * 100).toInt()}% - Text extracted successfully"
-        } else {
-            "OCR Confidence: ${(doc.ocrConfidence * 100).toInt()}% - May need manual review"
+        val description = buildString {
+            // Add type information
+            append("Type: ${doc.type.replaceFirstChar { it.uppercaseChar() }}\n")
+            
+            // Add OCR confidence
+            val confidence = (doc.ocrConfidence * 100).toInt()
+            append("OCR Confidence: $confidence%\n")
+            
+            // Add text preview if available
+            if (!doc.text.isNullOrBlank()) {
+                val preview = doc.text.take(100).replace("\n", " ")
+                append("Preview: $preview${if (doc.text.length > 100) "..." else ""}")
+            } else {
+                append("No text extracted")
+            }
         }
+        return description
     }
     
     private fun formatDate(dateString: String): String {
         return try {
             val instant = java.time.Instant.parse(dateString)
             val date = java.time.LocalDate.ofInstant(instant, java.time.ZoneId.systemDefault())
-            date.toString()
+            val formatter = java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy")
+            date.format(formatter)
         } catch (e: Exception) {
-            dateString.substring(0, 10)
+            try {
+                // Try parsing just the date part
+                dateString.substring(0, 10).let { datePart ->
+                    java.time.LocalDate.parse(datePart).format(
+                        java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy")
+                    )
+                }
+            } catch (e2: Exception) {
+                dateString.substring(0, minOf(10, dateString.length))
+            }
         }
     }
     

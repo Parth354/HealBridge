@@ -37,6 +37,9 @@ class AppointmentsFragment : Fragment() {
         setupTabs()
         setupFAB()
         loadAppointments()
+        
+        // Schedule notifications when appointments are loaded
+        NotificationScheduler.scheduleAllAppointments(requireContext(), apiRepository)
     }
     
     private fun setupTabs() {
@@ -59,6 +62,7 @@ class AppointmentsFragment : Fragment() {
             startActivity(Intent(requireContext(), DoctorSearchActivity::class.java))
         }
     }
+    
     
     private fun loadAppointments() {
         if (_binding != null) {
@@ -173,9 +177,6 @@ class AppointmentsFragment : Fragment() {
         }
     }
     
-    fun onBookAppointmentClick(view: View) {
-        startActivity(Intent(requireContext(), DoctorSearchActivity::class.java))
-    }
 
     override fun onResume() {
         super.onResume()

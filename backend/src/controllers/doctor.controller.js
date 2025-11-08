@@ -79,6 +79,35 @@ class DoctorController {
     }
   }
 
+  // Update schedule block
+  async updateSchedule(req, res) {
+    try {
+      const doctorId = req.user.doctorId;
+      const { blockId } = req.params;
+      const updates = req.body;
+
+      const schedule = await scheduleService.updateScheduleBlock(blockId, doctorId, updates);
+      res.json({ success: true, schedule });
+    } catch (error) {
+      console.error('Update schedule error:', error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  // Delete schedule block
+  async deleteSchedule(req, res) {
+    try {
+      const doctorId = req.user.doctorId;
+      const { blockId } = req.params;
+
+      await scheduleService.deleteScheduleBlock(blockId, doctorId);
+      res.json({ success: true, message: 'Schedule block deleted successfully' });
+    } catch (error) {
+      console.error('Delete schedule error:', error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+
   // Get doctor's appointments
   async getAppointments(req, res) {
     try {

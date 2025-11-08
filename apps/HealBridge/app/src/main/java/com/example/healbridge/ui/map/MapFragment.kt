@@ -2,6 +2,7 @@ package com.example.healbridge.ui.map
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
@@ -429,7 +430,15 @@ class MapFragment : Fragment() {
             binding.tvSelectedDoctorDistance.text = "%.1f km away".format(distance)
             
             binding.btnBookAppointment.setOnClickListener {
-                Toast.makeText(context, "Booking appointment with ${doctor.name}", Toast.LENGTH_SHORT).show()
+                // Navigate to booking flow with selected doctor
+                val intent = Intent(requireContext(), com.example.healbridge.ui.booking.BookAppointmentActivity::class.java).apply {
+                    putExtra("doctor_id", doctor.id)
+                    putExtra("doctor_name", doctor.name)
+                    putExtra("doctor_specialty", doctor.specialty)
+                    putExtra("clinic_id", doctor.clinicId)
+                    putExtra("clinic_name", doctor.clinicName)
+                }
+                startActivity(intent)
             }
         }
     }

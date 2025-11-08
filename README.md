@@ -1,12 +1,9 @@
 # HealBridge - Complete Healthcare Platform
 
 A comprehensive healthcare platform connecting patients with doctors through intelligent triage, seamless booking, and AI-powered medical assistance.
-
-## 📱 App Screenshots
-
-| Onboarding & Triage | Doctor Search | Booking Flow | Consultation |
+ | Doctor Dashboard | Doctor Profile | Medical Records | Doctors Map |
 |---------------------|---------------|--------------|--------------|
-| ![p1](./screenshots/p1.png) | ![p2](./screenshots/p2.png) | ![p3](./screenshots/p3.png) | ![p4](./screenshots/p4.png) |
+| ![p1](./p1.png) | ![p2](./p2.png) | ![p3](./p3.jpg) | ![p4](./p4.jpg) |
 
 ## 🏥 Complete Workflow: Start to Finish
 
@@ -226,12 +223,24 @@ notification(id, user_id, appointment_id, type, channel, scheduled_at, sent_at, 
 - **OCR**: Google Vision API / Tesseract
 - **Deployment**: Render / Railway
 
-### **Frontend**
-- **Mobile**: React Native + Expo
-- **Web**: React + Vite
-- **State**: Zustand / Redux Toolkit
-- **Navigation**: React Navigation
-- **UI**: NativeBase / Tamagui
+### **Patient Mobile App (Android)**
+- **Language**: Kotlin
+- **UI Framework**: Material Design 3 + ViewBinding
+- **Architecture**: MVVM with AndroidViewModel
+- **Networking**: Retrofit + OkHttp
+- **Authentication**: Firebase Auth
+- **Database**: Firebase Firestore
+- **Notifications**: Firebase Cloud Messaging + WorkManager
+- **Location**: Google Play Services Location
+- **Image Processing**: Glide
+- **Dependency Injection**: Manual (can be migrated to Hilt/Koin)
+
+### **Doctor Web App**
+- **Framework**: React + Vite
+- **State Management**: React Query + Context API
+- **UI Library**: Tailwind CSS + Material Design
+- **Routing**: React Router
+- **Charts**: Recharts (for analytics)
 
 ### **Infrastructure**
 - **Storage**: AWS S3 / Cloudinary
@@ -257,12 +266,28 @@ npx prisma migrate dev
 npm run dev
 ```
 
-### **Mobile App Setup**
+### **Patient Mobile App Setup (Android)**
 ```bash
 cd apps/HealBridge
-npm install
-npx expo start
+# Open in Android Studio
+# Sync Gradle files
+# Run on emulator or device
 ```
+
+**Prerequisites:**
+- Android Studio Hedgehog or later
+- JDK 17+
+- Android SDK 24+ (minSdk), 35 (targetSdk)
+- Firebase project with `google-services.json` in `app/` directory
+
+**Key Features Implemented:**
+- ✅ Firebase Authentication (Email/Google)
+- ✅ Appointment booking with slot holds
+- ✅ Medical records management with OCR
+- ✅ Patient summary chatbot with RAG
+- ✅ Doctor search with map view
+- ✅ Appointment reminders with directions (1 hour prior)
+- ✅ Modern Material Design 3 UI
 
 ### **Doctor Web App Setup**
 ```bash
@@ -279,30 +304,54 @@ npm run dev
 - **Low OCR confidence**: request user confirm before reminders
 - **Emergency leave**: batch reschedule workflow with ranked alternatives
 
-## 🎯 What to Build First (Hackathon Cut)
+## ✅ Current Implementation Status
 
-### **Day 1**
-Auth, doctor search + availability, slot hold→book, notifications, prescription PDF, email send, basic OCR stub, medication reminders scheduler
+### **Patient App (Android) - Completed Features**
+- ✅ Firebase Authentication (Email/Google Sign-in)
+- ✅ User profile creation and management
+- ✅ Doctor search with filters (specialty, distance, rating)
+- ✅ Interactive map view with doctor locations
+- ✅ Appointment booking flow (slot hold → confirmation)
+- ✅ Medical records upload and OCR processing
+- ✅ Patient summary chatbot with RAG (Retrieval-Augmented Generation)
+- ✅ Appointment viewing (upcoming/past with tabs)
+- ✅ Appointment reminders with directions (1 hour prior notification)
+- ✅ Modern Material Design 3 UI
+- ✅ Home screen with quick actions
+- ✅ Emergency call functionality
 
-### **Day 2**
-Check-in + live wait time, doctor portal with summary and RAG over prescriptions, navigation deep link, reschedule/cancel, license status flag
+### **Doctor App (Web) - Completed Features**
+- ✅ Doctor authentication and profile setup
+- ✅ Schedule management (create, update, delete slots)
+- ✅ Appointment viewing and management
+- ✅ Clinic management
+- ✅ Analytics dashboard
+- ✅ Patient context with RAG chat
 
-## 📝 License
+### **Backend - Completed Features**
+- ✅ RESTful API with Express.js
+- ✅ Firebase authentication integration
+- ✅ Prisma ORM with PostgreSQL
+- ✅ Doctor search with geolocation
+- ✅ Slot availability calculation
+- ✅ Appointment booking with conflict prevention
+- ✅ Schedule block management (CRUD)
+- ✅ Notification service (email, push)
+- ✅ OCR service integration
+- ✅ RAG service for patient summaries
 
-MIT License - see [LICENSE](LICENSE) file for details.
+## 🎯 Roadmap
 
-## 🤝 Contributing
+### **Upcoming Features**
+- [ ] Medicine reminder system
+- [ ] Prescription refill tracking
+- [ ] Video consultation (Telemedicine)
+- [ ] Real-time wait time estimation
+- [ ] Check-in QR code scanning
+- [ ] Care circle sharing
+- [ ] Multi-language support
+- [ ] Voice assistant integration
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
 
-## 📞 Support
-
-For support, email support@healbridge.com or join our Slack channel.
-
----
 
 **HealBridge** - Bridging the gap between patients and healthcare providers through intelligent technology.

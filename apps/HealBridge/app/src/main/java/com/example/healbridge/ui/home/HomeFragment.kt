@@ -1,13 +1,16 @@
 package com.example.healbridge.ui.home
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.healbridge.R
 import com.example.healbridge.databinding.FragmentHomeBinding
 import com.example.healbridge.ui.search.DoctorSearchActivity
 import com.example.healbridge.SecurePreferences
@@ -84,11 +87,17 @@ class HomeFragment : Fragment() {
                             val fullName = "$firstName $lastName".trim()
                             
                             // Use firstName if available, otherwise use fullName, otherwise fallback
-                            binding.userNameText.text = when {
-                                firstName.isNotEmpty() -> firstName
-                                fullName.isNotEmpty() -> fullName
+                            // Capitalize first letter properly
+                            val displayName = when {
+                                firstName.isNotEmpty() -> firstName.replaceFirstChar { 
+                                    if (it.isLowerCase()) it.titlecase() else it.toString() 
+                                }
+                                fullName.isNotEmpty() -> fullName.replaceFirstChar { 
+                                    if (it.isLowerCase()) it.titlecase() else it.toString() 
+                                }
                                 else -> "User"
                             }
+                            binding.userNameText.text = displayName
                         } else {
                             // User document doesn't exist, try to get from Firebase Auth
                             val currentUser = auth.currentUser
@@ -122,6 +131,7 @@ class HomeFragment : Fragment() {
     
     private fun setupClickListeners() {
         binding.searchContainer.setOnClickListener {
+            // Navigate to doctor search activity which will search from backend
             startActivity(Intent(requireContext(), DoctorSearchActivity::class.java))
         }
         
@@ -130,17 +140,53 @@ class HomeFragment : Fragment() {
         }
         
         binding.emergencyCard.setOnClickListener {
-            // Handle emergency - call emergency services or show emergency contacts
-            viewModel.handleEmergency()
+            // Call ambulance - dial emergency number
+            callAmbulance()
         }
         
         binding.viewAllAppointments.setOnClickListener {
-            // Navigate to appointments tab
-            // This would typically use NavController to navigate to appointments fragment
+            // Navigate to appointments fragment using NavController
+            try {
+                findNavController().navigate(R.id.tab_appointments)
+            } catch (e: Exception) {
+                android.util.Log.e("HomeFragment", "Error navigating to appointments: ${e.message}")
+            }
+        }
+        
+        binding.viewAllRecords.setOnClickListener {
+            // Navigate to records fragment using NavController
+            try {
+                findNavController().navigate(R.id.tab_records)
+            } catch (e: Exception) {
+                android.util.Log.e("HomeFragment", "Error navigating to records: ${e.message}")
+            }
         }
         
         binding.notificationIcon.setOnClickListener {
             // Handle notifications - show notifications screen
+            // TODO: Implement notifications screen
+        }
+    }
+    
+    private fun callAmbulance() {
+        // Determine emergency number based on region (108 for India, 911 for US/others)
+        // For now, using 108 (India emergency number)
+        val emergencyNumber = "108" // Can be made configurable based on user location
+        
+        val intent = Intent(Intent.ACTION_DIAL).apply {
+            data = Uri.parse("tel:$emergencyNumber")
+        }
+        
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("HomeFragment", "Error calling ambulance: ${e.message}")
+            // Show error message to user
+            android.widget.Toast.makeText(
+                requireContext(),
+                "Unable to make emergency call. Please dial $emergencyNumber manually.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
         }
     }
     

@@ -54,6 +54,26 @@ export const getSchedule = async (startDate, endDate) => {
   }
 };
 
+// Update schedule block
+export const updateSchedule = async (blockId, scheduleData) => {
+  try {
+    const response = await apiClient.put(`/doctor/schedule/${blockId}`, scheduleData);
+    return { success: true, data: response.schedule };
+  } catch (error) {
+    throw new Error(error.response?.data?.error || 'Failed to update schedule');
+  }
+};
+
+// Delete schedule block
+export const deleteSchedule = async (blockId) => {
+  try {
+    const response = await apiClient.delete(`/doctor/schedule/${blockId}`);
+    return { success: true, message: response.message || 'Schedule deleted successfully' };
+  } catch (error) {
+    throw new Error(error.response?.data?.error || 'Failed to delete schedule');
+  }
+};
+
 // ==================== APPOINTMENTS ====================
 
 // Get doctor's appointments

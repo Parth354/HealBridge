@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { format, addDays, startOfWeek, endOfWeek } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, Pause, Calendar as CalendarIcon, Filter, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Pause, Calendar as CalendarIcon, Filter, X, Edit2, Trash2, Clock } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppointments, useStartConsultation } from '../hooks/useAppointments';
-import { markUnavailable, createSchedule, createRecurringSchedule, getClinics, getAppointments } from '../api/doctorApi';
+import { markUnavailable, createSchedule, createRecurringSchedule, getClinics, getAppointments, getSchedule, updateSchedule, deleteSchedule } from '../api/doctorApi';
 import AppointmentCard from '../components/AppointmentCard';
 import { AppointmentCardSkeleton } from '../components/SkeletonLoader';
 import { APPOINTMENT_STATUS } from '../utils/constants';
@@ -14,8 +14,16 @@ const Schedule = () => {
   const [viewMode, setViewMode] = useState('day'); // 'day' or 'week'
   const [filterStatus, setFilterStatus] = useState('all');
   const [showAddSlotModal, setShowAddSlotModal] = useState(false);
+  const [showEditSlotModal, setShowEditSlotModal] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState(null);
   const [isAddingSlot, setIsAddingSlot] = useState(false);
+  const [isUpdatingSlot, setIsUpdatingSlot] = useState(false);
+  const [isDeletingSlot, setIsDeletingSlot] = useState(false);
   const [clinics, setClinics] = useState([]);
+  const [scheduleBlocks, setScheduleBlocks] = useState([]);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [showSlots, setShowSlots] = useState(true); // Toggle to show/hide slots
   const { showSuccess, showError } = useToast();
   
   // Add Slot Form State
@@ -108,6 +116,30 @@ const Schedule = () => {
       console.error('Failed to fetch clinics:', error);
       setClinics([]); // Set empty array on error
       showError('Failed to load clinics. Please try refreshing the page.');
+    }
+  };
+
+  const fetchScheduleBlocks = async () => {
+    try {
+      setIsLoadingSlots(true);
+      const startDate = viewMode === 'day' 
+        ? selectedDate.toISOString().split('T')[0]
+        : format(startOfWeek(selectedDate, { weekStartsOn: 0 }), 'yyyy-MM-dd');
+      const endDate = viewMode === 'day'
+        ? selectedDate.toISOString().split('T')[0]
+        : format(endOfWeek(selectedDate, { weekStartsOn: 0 }), 'yyyy-MM-dd');
+      
+      const response = await getSchedule(startDate, endDate);
+      if (response && response.scheduleBlocks) {
+        setScheduleBlocks(response.scheduleBlocks);
+      } else {
+        setScheduleBlocks([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch schedule blocks:', error);
+      setScheduleBlocks([]);
+    } finally {
+      setIsLoadingSlots(false);
     }
   };
 
@@ -234,6 +266,7 @@ const Schedule = () => {
       });
       setShowAddSlotModal(false);
       handleRefetch();
+      fetchScheduleBlocks(); // Refresh schedule blocks
     } catch (error) {
       if (error.message.includes('Unique constraint')) {
         showError('Schedule already exists for this time slot. Please choose a different time.');
@@ -243,6 +276,90 @@ const Schedule = () => {
     } finally {
       setIsAddingSlot(false);
     }
+  };
+
+  const handleEditSlot = (slot) => {
+    setSelectedSlot(slot);
+    // Pre-fill form with slot data
+    const startDate = new Date(slot.startTs);
+    const endDate = new Date(slot.endTs);
+    setSlotForm({
+      clinic_id: slot.clinic_id,
+      date: format(startDate, 'yyyy-MM-dd'),
+      start_time: format(startDate, 'HH:mm'),
+      end_time: format(endDate, 'HH:mm'),
+      slot_duration_minutes: slot.slotMinutes || 30,
+      is_house_visit: false,
+      is_recurring: false,
+      recurrence_type: 'WEEKLY',
+      recurrence_end_date: ''
+    });
+    setShowEditSlotModal(true);
+  };
+
+  const handleUpdateSlot = async (e) => {
+    e.preventDefault();
+    
+    if (!selectedSlot) return;
+
+    // Validation
+    if (!slotForm.clinic_id || !slotForm.date || !slotForm.start_time || !slotForm.end_time) {
+      showError('Please fill in all required fields');
+      return;
+    }
+
+    if (slotForm.start_time >= slotForm.end_time) {
+      showError('End time must be after start time');
+      return;
+    }
+
+    try {
+      setIsUpdatingSlot(true);
+      const startDate = new Date(`${slotForm.date}T${slotForm.start_time}:00`);
+      const endDate = new Date(`${slotForm.date}T${slotForm.end_time}:00`);
+      
+      const updateData = {
+        startTs: startDate.toISOString(),
+        endTs: endDate.toISOString(),
+        slotMinutes: parseInt(slotForm.slot_duration_minutes),
+        bufferMinutes: 0,
+        type: 'work'
+      };
+
+      await updateSchedule(selectedSlot.id, updateData);
+      showSuccess('Schedule slot updated successfully!');
+      setShowEditSlotModal(false);
+      setSelectedSlot(null);
+      fetchScheduleBlocks();
+      handleRefetch();
+    } catch (error) {
+      showError(error.message || 'Failed to update schedule slot');
+    } finally {
+      setIsUpdatingSlot(false);
+    }
+  };
+
+  const handleDeleteSlot = async () => {
+    if (!selectedSlot) return;
+
+    try {
+      setIsDeletingSlot(true);
+      await deleteSchedule(selectedSlot.id);
+      showSuccess('Schedule slot deleted successfully!');
+      setShowDeleteConfirmModal(false);
+      setSelectedSlot(null);
+      fetchScheduleBlocks();
+      handleRefetch();
+    } catch (error) {
+      showError(error.message || 'Failed to delete schedule slot');
+    } finally {
+      setIsDeletingSlot(false);
+    }
+  };
+
+  const handleOpenDeleteConfirm = (slot) => {
+    setSelectedSlot(slot);
+    setShowDeleteConfirmModal(true);
   };
 
   const handleOpenAddSlot = async () => {

@@ -1,4 +1,4 @@
-package com.example.healbridge.ui.booking
+package com.example.healbridge.ui.search
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
@@ -9,11 +9,9 @@ import com.example.healbridge.R
 import com.example.healbridge.data.models.Doctor
 import com.example.healbridge.databinding.ItemDoctorSelectionBinding
 
-class DoctorSelectionAdapter(
+class DoctorSearchAdapter(
     private val onDoctorClick: (Doctor) -> Unit
-) : ListAdapter<Doctor, DoctorSelectionAdapter.DoctorViewHolder>(DiffCallback()) {
-    
-    private var selectedDoctorId: String? = null
+) : ListAdapter<Doctor, DoctorSearchAdapter.DoctorViewHolder>(DiffCallback()) {
     
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DoctorViewHolder {
         val binding = ItemDoctorSelectionBinding.inflate(
@@ -26,11 +24,6 @@ class DoctorSelectionAdapter(
     
     override fun onBindViewHolder(holder: DoctorViewHolder, position: Int) {
         holder.bind(getItem(position))
-    }
-    
-    fun setSelectedDoctor(doctorId: String?) {
-        selectedDoctorId = doctorId
-        notifyDataSetChanged()
     }
     
     inner class DoctorViewHolder(
@@ -54,31 +47,6 @@ class DoctorSelectionAdapter(
                         root.context.getColor(R.color.error)
                 )
                 
-                // Highlight selected doctor with visual feedback
-                val isSelected = doctor.id == selectedDoctorId
-                root.isSelected = isSelected
-                
-                // Change background color and elevation for selected doctor
-                if (isSelected) {
-                    root.setBackgroundColor(root.context.getColor(R.color.primary))
-                    root.alpha = 0.9f
-                    root.elevation = 8f
-                    // Make text white for better contrast
-                    doctorName.setTextColor(root.context.getColor(R.color.white))
-                    doctorSpecialty.setTextColor(root.context.getColor(R.color.white))
-                    clinicName.setTextColor(root.context.getColor(R.color.white))
-                    consultationFee.setTextColor(root.context.getColor(R.color.white))
-                } else {
-                    root.setBackgroundColor(root.context.getColor(R.color.card_background))
-                    root.alpha = 1f
-                    root.elevation = 2f
-                    // Reset to default text colors
-                    doctorName.setTextColor(root.context.getColor(R.color.text_primary))
-                    doctorSpecialty.setTextColor(root.context.getColor(R.color.text_secondary))
-                    clinicName.setTextColor(root.context.getColor(R.color.text_secondary))
-                    consultationFee.setTextColor(root.context.getColor(R.color.text_primary))
-                }
-                
                 root.setOnClickListener {
                     onDoctorClick(doctor)
                 }
@@ -96,3 +64,4 @@ class DoctorSelectionAdapter(
         }
     }
 }
+
