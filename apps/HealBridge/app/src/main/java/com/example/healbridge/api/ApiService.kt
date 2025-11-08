@@ -1,6 +1,10 @@
 package com.example.healbridge.api
 
 import com.example.healbridge.data.models.*
+import com.example.healbridge.data.models.OTPRequest
+import com.example.healbridge.data.models.OTPResponse
+import com.example.healbridge.data.models.VerifyOTPRequest
+import com.example.healbridge.data.models.LoginResponse
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -72,6 +76,10 @@ interface ApiService {
     @PUT("api/patient/profile")
     suspend fun updatePatientProfile(@Body profile: Map<String, Any>): Response<ProfileResponse>
     
+    // Create Patient Profile (via auth routes)
+    @POST("api/auth/patient/profile")
+    suspend fun createPatientProfile(@Body profile: Map<String, Any>): Response<ProfileResponse>
+    
     // Triage
     @POST("api/patient/triage/analyze")
     suspend fun analyzeSymptoms(@Body request: TriageRequest): Response<TriageResponse>
@@ -87,9 +95,12 @@ interface ApiService {
     @GET("api/patient/summary")
     suspend fun getPatientSummary(): Response<PatientSummaryResponse>
     
-    // Firebase authentication
-    @POST("api/auth/firebase/login")
-    suspend fun registerFirebaseUser(@Body request: Map<String, String>): Response<SuccessResponse>
+    // OTP Authentication
+    @POST("api/auth/otp/send")
+    suspend fun sendOTP(@Body request: OTPRequest): Response<OTPResponse>
+    
+    @POST("api/auth/otp/verify")
+    suspend fun verifyOTP(@Body request: VerifyOTPRequest): Response<LoginResponse>
     
     // Test endpoints
     @GET("api/test/auth")

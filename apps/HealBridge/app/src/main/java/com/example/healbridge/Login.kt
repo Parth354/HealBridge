@@ -4,190 +4,166 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import android.widget.ProgressBar
-import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.healbridge.databinding.ActivityLoginBinding
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
-import com.google.android.material.snackbar.Snackbar
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.firestore.FirebaseFirestore
+import com.example.healbridge.api.ApiRepository
+import com.example.healbridge.data.NetworkResult
 import kotlinx.coroutines.launch
 
 class Login : AppCompatActivity() {
 
     private lateinit var binding: ActivityLoginBinding
-    private lateinit var auth: FirebaseAuth
-    private lateinit var googleSignInClient: GoogleSignInClient
-    private lateinit var firestore: FirebaseFirestore
-    private lateinit var apiService: ApiService
-
-    // Modern Activity Result API
-    private val googleSignInLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-        try {
-            val account = task.getResult(ApiException::class.java)
-            Log.d("GoogleSignIn", "Account: ${account.email}")
-            firebaseAuthWithGoogle(account)
-        } catch (e: ApiException) {
-            binding.loadingIndicator.visibility = View.GONE
-            binding.googleSignInButton.isEnabled = true
-            Log.e("GoogleSignIn", "Error code: ${e.statusCode}", e)
-
-            val errorMessage = when (e.statusCode) {
-                10 -> "Configuration error. Please contact support."
-                12501 -> "Sign-in cancelled"
-                7 -> "Network error. Please check your connection."
-                else -> "Sign-in failed: ${e.message}"
-            }
-            Snackbar.make(binding.root, errorMessage, Snackbar.LENGTH_LONG).show()
-        }
-    }
+    private lateinit var apiRepository: ApiRepository
+    private var phoneNumber: String = ""
+    private var isOtpSent = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        auth = FirebaseAuth.getInstance()
-        firestore = FirebaseFirestore.getInstance()
-        apiService = ApiService(this)
-
-        // Configure Google Sign-In
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(getString(R.string.default_web_client_id))
-            .requestEmail()
-            .build()
-
-        googleSignInClient = GoogleSignIn.getClient(this, gso)
-
-        // Set up sign-in button
-        binding.googleSignInButton.setOnClickListener {
-            binding.loadingIndicator.visibility = View.VISIBLE
-            signInWithGoogle()
-        }
-    }
-
-    private fun signInWithGoogle() {
-        // Show loading state
-        binding.googleSignInButton.isEnabled = false
-        binding.loadingIndicator.visibility = View.VISIBLE
         
-        // Sign out first to force account selection
-        googleSignInClient.signOut().addOnCompleteListener {
-            val signInIntent = googleSignInClient.signInIntent
-            googleSignInLauncher.launch(signInIntent)
+        // Initialize ApiClient
+        ApiClient.initialize(this)
+        
+        apiRepository = ApiRepository(this)
+        
+        setupClickListeners()
+    }
+    
+    private fun setupClickListeners() {
+        binding.btnSendOtp.setOnClickListener {
+            if (!isOtpSent) {
+                sendOTP()
+            } else {
+                verifyOTP()
+            }
+        }
+        
+        binding.btnChangePhone.setOnClickListener {
+            isOtpSent = false
+            binding.etPhoneNumber.isEnabled = true
+            binding.phoneInputLayout.visibility = View.VISIBLE
+            binding.otpInputLayout.visibility = View.GONE
+            binding.btnSendOtp.text = "Send OTP"
+            binding.btnChangePhone.visibility = View.GONE
+            binding.etOtp.setText("")
         }
     }
-
-    private fun firebaseAuthWithGoogle(account: GoogleSignInAccount) {
-        val credential = GoogleAuthProvider.getCredential(account.idToken, null)
-        auth.signInWithCredential(credential)
-            .addOnCompleteListener(this) { task ->
-                if (task.isSuccessful) {
-                    val user = auth.currentUser
-                    user?.let {
-                        // Save user ID to secure preferences
-                        SecurePreferences.saveUserId(this, it.uid)
-                        Log.d("Login", "User authenticated: ${it.uid}")
-
-                        // Authenticate with backend
-                        authenticateWithBackend()
-                    }
-                } else {
-                    binding.loadingIndicator.visibility = View.GONE
-                    Log.e("Login", "Authentication failed", task.exception)
-                    Snackbar.make(
-                        binding.root,
-                        "Authentication failed: ${task.exception?.message}",
-                        Snackbar.LENGTH_LONG
-                    ).show()
-                }
-            }
-    }
-
-    private fun authenticateWithBackend() {
+    
+    private fun sendOTP() {
+        phoneNumber = binding.etPhoneNumber.text?.toString()?.trim() ?: ""
+        
+        if (phoneNumber.length != 10) {
+            showError("Please enter a valid 10-digit phone number")
+            return
+        }
+        
+        binding.loadingIndicator.visibility = View.VISIBLE
+        binding.btnSendOtp.isEnabled = false
+        binding.tvError.visibility = View.GONE
+        
         lifecycleScope.launch {
             try {
-                Log.d("Login", "Authenticating with backend...")
+                val result = apiRepository.sendOTP(phoneNumber, "PATIENT")
                 
-                val result = apiService.authenticateWithFirebase("PATIENT")
-                
-                result.onSuccess { response ->
-                    Log.d("Login", "✅ Backend authentication successful")
-                    Log.d("Login", "User ID: ${response.user.id}")
-                    Log.d("Login", "Has Profile: ${response.user.hasProfile}")
-                    
-                    binding.loadingIndicator.visibility = View.GONE
-                    
-                    // Check if user has completed profile
-                    if (response.user.hasProfile) {
-                        // Also check Firestore for backward compatibility
-                        checkUserDetailsInFirestore(auth.currentUser?.uid ?: "")
-                    } else {
-                        // User needs to complete profile
-                        navigateToUserDetails()
+                when (result) {
+                    is NetworkResult.Success -> {
+                        isOtpSent = true
+                        binding.etPhoneNumber.isEnabled = false
+                        binding.phoneInputLayout.isEnabled = false
+                        binding.otpInputLayout.visibility = View.VISIBLE
+                        binding.btnSendOtp.text = "Verify OTP"
+                        binding.btnChangePhone.visibility = View.VISIBLE
+                        binding.loadingIndicator.visibility = View.GONE
+                        binding.btnSendOtp.isEnabled = true
+                        Toast.makeText(this@Login, "OTP sent successfully", Toast.LENGTH_SHORT).show()
                     }
-                }.onFailure { error ->
-                    binding.loadingIndicator.visibility = View.GONE
-                    Log.e("Login", "❌ Backend authentication failed", error)
-                    
-                    // Fallback to Firestore check if backend fails
-                    Snackbar.make(
-                        binding.root,
-                        "Backend authentication failed. Using offline mode.",
-                        Snackbar.LENGTH_LONG
-                    ).show()
-                    
-                    checkUserDetailsInFirestore(auth.currentUser?.uid ?: "")
+                    is NetworkResult.Error -> {
+                        binding.loadingIndicator.visibility = View.GONE
+                        binding.btnSendOtp.isEnabled = true
+                        showError("Failed to send OTP: ${result.message}")
+                    }
+                    is NetworkResult.Loading -> {
+                        // Loading state already shown
+                    }
                 }
             } catch (e: Exception) {
                 binding.loadingIndicator.visibility = View.GONE
-                Log.e("Login", "Backend authentication error", e)
-                Snackbar.make(
-                    binding.root,
-                    "Error: ${e.message}",
-                    Snackbar.LENGTH_LONG
-                ).show()
+                binding.btnSendOtp.isEnabled = true
+                Log.e("Login", "Error sending OTP", e)
+                showError("Error: ${e.message}")
             }
         }
     }
-
-    private fun checkUserDetailsInFirestore(uid: String) {
-        firestore.collection("users").document(uid).get()
-            .addOnSuccessListener { document ->
-                if (document.exists()) {
-                    Log.d("Login", "User document exists, navigating to Home")
-                    navigateToHome()
-                } else {
-                    Log.d("Login", "User document doesn't exist, navigating to UserDetails")
-                    navigateToUserDetails()
+    
+    private fun verifyOTP() {
+        val otp = binding.etOtp.text?.toString()?.trim() ?: ""
+        
+        if (otp.length != 6) {
+            showError("Please enter a valid 6-digit OTP")
+            return
+        }
+        
+        binding.loadingIndicator.visibility = View.VISIBLE
+        binding.btnSendOtp.isEnabled = false
+        binding.tvError.visibility = View.GONE
+        
+        lifecycleScope.launch {
+            try {
+                val result = apiRepository.verifyOTP(phoneNumber, otp, "PATIENT")
+                
+                when (result) {
+                    is NetworkResult.Success -> {
+                        val response = result.data
+                        
+                        // Save token and user ID
+                        SecurePreferences.saveAuthToken(this@Login, response.token)
+                        SecurePreferences.saveUserId(this@Login, response.user.id)
+                        
+                        Log.d("Login", "✅ Login successful")
+                        Log.d("Login", "User ID: ${response.user.id}")
+                        Log.d("Login", "Has Profile: ${response.user.hasProfile}")
+                        
+                        binding.loadingIndicator.visibility = View.GONE
+                        
+                        // Check if user has profile
+                        if (response.user.hasProfile) {
+                            navigateToHome()
+                        } else {
+                            navigateToUserDetails()
+                        }
+                    }
+                    is NetworkResult.Error -> {
+                        binding.loadingIndicator.visibility = View.GONE
+                        binding.btnSendOtp.isEnabled = true
+                        showError("Invalid OTP: ${result.message}")
+                    }
+                    is NetworkResult.Loading -> {
+                        // Loading state already shown
+                    }
                 }
+            } catch (e: Exception) {
+                binding.loadingIndicator.visibility = View.GONE
+                binding.btnSendOtp.isEnabled = true
+                Log.e("Login", "Error verifying OTP", e)
+                showError("Error: ${e.message}")
             }
-            .addOnFailureListener { exception ->
-                Log.e("Login", "Error fetching user details", exception)
-                Snackbar.make(
-                    binding.root,
-                    "Error fetching user details: ${exception.message}",
-                    Snackbar.LENGTH_LONG
-                ).show()
-            }
+        }
     }
-
+    
+    private fun showError(message: String) {
+        binding.tvError.text = message
+        binding.tvError.visibility = View.VISIBLE
+    }
+    
     private fun navigateToHome() {
         val intent = Intent(this, Home::class.java)
         startActivity(intent)
         finish()
     }
-
+    
     private fun navigateToUserDetails() {
         val intent = Intent(this, UserDetails::class.java)
         startActivity(intent)

@@ -7,50 +7,63 @@ import android.view.inputmethod.InputMethodManager
 import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
+import com.example.healbridge.api.ApiClient
+import com.example.healbridge.api.ApiRepository
 import com.example.healbridge.databinding.ActivityHomeBinding
 import com.example.healbridge.services.AppointmentNotificationService
 import com.example.healbridge.services.NotificationScheduler
-import com.example.healbridge.api.ApiRepository
-import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
 
 class Home : AppCompatActivity() {
     private lateinit var binding: ActivityHomeBinding
-    private lateinit var firestore: FirebaseFirestore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize ApiClient
+        ApiClient.initialize(this)
         
         // Create notification channel for appointment reminders
         AppointmentNotificationService.createNotificationChannel(this)
         
         binding = ActivityHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        firestore = FirebaseFirestore.getInstance()
         
-        // Schedule notifications for upcoming appointments
-        val apiRepository = ApiRepository(this)
-        NotificationScheduler.scheduleAllAppointments(this, apiRepository)
-        val uid = SecurePreferences.getUserId(this)
-        if (uid == null) {
+        // Check authentication
+        val token = SecurePreferences.getAuthToken(this)
+        val userId = SecurePreferences.getUserId(this)
+        if (token == null || userId == null) {
             startActivity(Intent(this, Login::class.java))
             finish()
             return
         }
-
-        firestore.collection("users").document(uid).get()
-            .addOnSuccessListener {
-                if (!it.exists()) {
-                    startActivity(Intent(this, UserDetails::class.java))
-                    finish()
+        
+        // Schedule notifications for upcoming appointments
+        val apiRepository = ApiRepository(this)
+        NotificationScheduler.scheduleAllAppointments(this, apiRepository)
+        
+        // Check if user has profile
+        lifecycleScope.launch {
+            try {
+                val profileResult = apiRepository.getPatientProfile()
+                if (profileResult is com.example.healbridge.data.NetworkResult.Success) {
+                        val profile = profileResult.data.profile
+                        if (profile == null || profile.firstName.isNullOrEmpty()) {
+                            // No profile, navigate to user details
+                            val intent = Intent(this@Home, UserDetails::class.java)
+                            startActivity(intent)
+                            finish()
+                            return@launch
+                        }
                 }
+            } catch (e: Exception) {
+                // Error checking profile, continue to home
+                android.util.Log.e("Home", "Error checking profile", e)
             }
-            .addOnFailureListener {
-                startActivity(Intent(this, Login::class.java))
-                finish()
-            }
+        }
 
         // Get NavController from NavHostFragment
         val navHostFragment = supportFragmentManager

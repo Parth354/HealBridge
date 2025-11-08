@@ -108,21 +108,27 @@ data class WaitTimeResponse(
 // Profile Response
 data class ProfileResponse(
     val success: Boolean,
-    val profile: ProfileData,
-    val synced: Boolean
+    val profile: ProfileData?,
+    val hasProfile: Boolean? = null,
+    val synced: Boolean? = null,
+    val message: String? = null
 )
 
 data class ProfileData(
-    val uid: String,
     val firstName: String?,
     val lastName: String?,
+    val email: String?,
     val phoneNumber: String?,
     val dob: String?,
     val gender: String?,
-    val address: AddressData?,
-    val language: String?,
-    val consentDataUse: Boolean?,
-    val consentNotifications: Boolean?
+    val allergies: List<String>? = null,
+    val conditions: List<String>? = null,
+    val emergencyContactName: String? = null,
+    val emergencyContactPhone: String? = null,
+    val address: AddressData? = null,
+    val language: String? = null,
+    val consentDataUse: Boolean? = null,
+    val consentNotifications: Boolean? = null
 )
 
 data class AddressData(
@@ -167,6 +173,36 @@ data class MedicationDetail(
 data class PatientSummaryResponse(
     val summary: String,
     val lastUpdated: String
+)
+
+// OTP Request/Response
+data class OTPRequest(
+    val phone: String,
+    val role: String = "PATIENT"
+)
+
+data class OTPResponse(
+    val success: Boolean,
+    val message: String
+)
+
+data class VerifyOTPRequest(
+    val phone: String,
+    val otp: String,
+    val role: String = "PATIENT"
+)
+
+data class LoginResponse(
+    val token: String,
+    val user: LoginUser
+)
+
+data class LoginUser(
+    val id: String,
+    val phone: String?,
+    val role: String,
+    val verified: Boolean,
+    val hasProfile: Boolean
 )
 
 // Generic Success Response

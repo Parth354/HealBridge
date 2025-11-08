@@ -7,6 +7,7 @@ import androidx.security.crypto.MasterKeys
 object SecurePreferences {
     private const val PREFS_FILE_NAME = "secure_prefs"
     private const val KEY_USER_ID = "USER_ID"
+    private const val KEY_AUTH_TOKEN = "AUTH_TOKEN"
 
     private fun getEncryptedSharedPreferences(context: Context): EncryptedSharedPreferences {
         val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
@@ -28,6 +29,7 @@ object SecurePreferences {
             e.printStackTrace()
         }
     }
+    
     fun clearUserId(context: Context) {
         try {
             val prefs = getEncryptedSharedPreferences(context)
@@ -44,6 +46,43 @@ object SecurePreferences {
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+    
+    fun saveAuthToken(context: Context, token: String) {
+        try {
+            val prefs = getEncryptedSharedPreferences(context)
+            prefs.edit().putString(KEY_AUTH_TOKEN, token).apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+    
+    fun getAuthToken(context: Context): String? {
+        return try {
+            val prefs = getEncryptedSharedPreferences(context)
+            prefs.getString(KEY_AUTH_TOKEN, null)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+    
+    fun clearAuthToken(context: Context) {
+        try {
+            val prefs = getEncryptedSharedPreferences(context)
+            prefs.edit().remove(KEY_AUTH_TOKEN).apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+    
+    fun clearAll(context: Context) {
+        try {
+            val prefs = getEncryptedSharedPreferences(context)
+            prefs.edit().clear().apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }

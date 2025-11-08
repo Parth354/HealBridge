@@ -16,17 +16,16 @@ router.get('/test/auth', (req, res) => {
     user: {
       userId: req.user.userId,
       role: req.user.role,
-      firebaseUid: req.user.firebaseUid,
+      phone: req.user.phone,
+      email: req.user.email,
       hasPatientProfile: !!req.user.patientId
     }
   });
 });
 
-// Patient profile (from Firestore with sync)
+// Patient profile (from Prisma)
 router.get('/profile', patientController.getProfile);
 router.put('/profile', patientController.updateProfile);
-router.get('/data/complete', patientController.getCompleteData); // NEW: Get all patient data
-router.post('/sync/force', patientController.forceSync); // NEW: Force profile sync
 
 // Triage (no profile required)
 router.post('/triage/analyze', patientController.analyzeSyptoms);

@@ -4,8 +4,6 @@ import { generateToken } from '../config/auth.js';
 import config from '../config/env.js';
 import crypto from 'crypto';
 import twilio from 'twilio';
-import { verifyFirebaseToken, getFirebaseUser } from '../config/firebase.js';
-import firestoreService from './firestore.service.js';
 
 class AuthService {
   constructor() {
@@ -82,13 +80,8 @@ class AuthService {
     }
   }
 
-  // Verify OTP and create/login user (DOCTORS ONLY)
-  async verifyOTP(phone, otp, role = 'DOCTOR') {
-    // Block patient OTP login
-    if (role === 'PATIENT') {
-      throw new Error('Patient login via OTP is disabled. Please use Gmail login.');
-    }
-
+  // Verify OTP and create/login user (PATIENTS, DOCTORS, STAFF)
+  async verifyOTP(phone, otp, role = 'PATIENT') {
     const key = `otp:${phone}`;
     const storedOTP = await redisClient.get(key);
     
@@ -99,7 +92,7 @@ class AuthService {
     // Delete OTP after verification
     await redisClient.del(key);
 
-    // Find or create user (doctors and staff only)
+    // Find or create user (patients, doctors, and staff)
     let user = await prisma.user.findUnique({
       where: { phone },
       include: {
@@ -109,22 +102,33 @@ class AuthService {
     });
 
     if (!user) {
-      // Only allow creating doctor/staff accounts
-      if (role !== 'DOCTOR' && role !== 'STAFF') {
+      // Allow creating PATIENT, DOCTOR, or STAFF accounts
+      if (!['PATIENT', 'DOCTOR', 'STAFF'].includes(role)) {
         throw new Error('Invalid role for OTP authentication');
       }
 
       user = await prisma.user.create({
         data: {
           phone,
-          role,
+          role: role || 'PATIENT',
           verified: true
+        },
+        include: {
+          patient: true,
+          doctor: true
         }
       });
     } else {
-      // Verify user role is not PATIENT
-      if (user.role === 'PATIENT') {
-        throw new Error('Patient accounts must use Firebase authentication');
+      // If user exists but role doesn't match, update role
+      if (user.role !== role) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { role: role || user.role },
+          include: {
+            patient: true,
+            doctor: true
+          }
+        });
       }
     }
 
@@ -156,6 +160,9 @@ class AuthService {
         allergies: allergies || '',
         chronicConditions: chronicConditions || '',
         emergencyContact
+      },
+      include: {
+        user: true
       }
     });
 
@@ -211,139 +218,6 @@ class AuthService {
     });
   }
 
-  // Firebase authentication: Login/Register with Firebase ID token (PATIENTS ONLY)
-  async authenticateWithFirebase(firebaseIdToken, role = 'PATIENT') {
-    try {
-      // Only patients should use Firebase authentication
-      if (role !== 'PATIENT') {
-        throw new Error('Firebase authentication is only for patients. Doctors should use OTP login.');
-      }
-
-      // Verify Firebase ID token
-      const decodedToken = await verifyFirebaseToken(firebaseIdToken);
-      const { uid, email, email_verified, name, picture } = decodedToken;
-
-      if (!email) {
-        throw new Error('Email is required for Firebase authentication');
-      }
-
-      // Check if patient profile exists in Firestore
-      const firestoreProfile = await firestoreService.getPatientProfile(uid);
-      const hasProfile = firestoreProfile && firestoreProfile.firstName;
-
-      // Check if user exists in our system
-      let user = await prisma.user.findUnique({
-        where: { firebase_uid: uid },
-        include: {
-          patient: false, // Don't load patient from PostgreSQL
-          doctor: true
-        }
-      });
-
-      // If no user with Firebase UID, check if user exists with email
-      if (!user) {
-        user = await prisma.user.findUnique({
-          where: { email },
-          include: {
-            patient: false,
-            doctor: true
-          }
-        });
-
-        // If user exists with email but no firebase_uid, link accounts
-        if (user) {
-          user = await prisma.user.update({
-            where: { id: user.id },
-            data: { 
-              firebase_uid: uid,
-              email,
-              role: 'PATIENT', // Ensure role is PATIENT
-              verified: email_verified || true
-            },
-            include: {
-              patient: false,
-              doctor: true
-            }
-          });
-          console.log(`✅ Linked existing user ${user.id} with Firebase UID ${uid}`);
-        }
-      }
-
-      // Create new user if doesn't exist
-      if (!user) {
-        user = await prisma.user.create({
-          data: {
-            firebase_uid: uid,
-            email,
-            role: 'PATIENT',
-            verified: email_verified || true
-          }
-        });
-        console.log(`✅ Created new patient user ${user.id} with Firebase UID ${uid}`);
-      }
-
-      // Generate JWT token for our system
-      const token = generateToken(user.id, user.role);
-
-      return {
-        token,
-        user: {
-          id: user.id,
-          email: user.email,
-          firebase_uid: user.firebase_uid,
-          role: user.role,
-          verified: user.verified,
-          hasProfile: hasProfile, // Check Firestore instead of PostgreSQL
-          name: name || firestoreProfile?.name || null,
-          picture: picture || null,
-          profileData: firestoreProfile || null
-        }
-      };
-    } catch (error) {
-      console.error('Firebase authentication error:', error);
-      throw new Error(`Firebase authentication failed: ${error.message}`);
-    }
-  }
-
-  // Sync Firebase user data with our database
-  async syncFirebaseUser(userId, firebaseIdToken) {
-    try {
-      const decodedToken = await verifyFirebaseToken(firebaseIdToken);
-      const { uid, email, name, picture } = decodedToken;
-
-      const user = await prisma.user.update({
-        where: { id: userId },
-        data: {
-          firebase_uid: uid,
-          email: email || undefined
-        },
-        include: {
-          patient: true,
-          doctor: true
-        }
-      });
-
-      return {
-        success: true,
-        user,
-        firebaseData: { name, picture }
-      };
-    } catch (error) {
-      console.error('Sync Firebase user error:', error);
-      throw new Error(`Failed to sync Firebase user: ${error.message}`);
-    }
-  }
-
-  // Get or create user from Firebase UID (for linking accounts)
-  async getUserByFirebaseUid(firebaseUid) {
-    return await prisma.user.findUnique({
-      where: { firebase_uid: firebaseUid },
-      include: {
-        patient: true,
-        doctor: true
-      }
-    });
-  }
 }
 
 export default new AuthService();

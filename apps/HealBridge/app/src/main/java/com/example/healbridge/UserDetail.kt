@@ -13,18 +13,20 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.example.healbridge.api.ApiClient
+import com.example.healbridge.api.ApiRepository
+import com.example.healbridge.data.NetworkResult
 import com.example.healbridge.databinding.ActivityUserDetailsBinding
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
-import com.google.firebase.Firebase
-import com.google.firebase.auth.auth
-import com.google.firebase.firestore.firestore
+import kotlinx.coroutines.launch
 import java.util.*
 
 class UserDetails : AppCompatActivity() {
     private lateinit var binding: ActivityUserDetailsBinding
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private var uid: String? = null
+    private lateinit var apiRepository: ApiRepository
     
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -47,10 +49,15 @@ class UserDetails : AppCompatActivity() {
         binding = ActivityUserDetailsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        // Initialize ApiClient
+        ApiClient.initialize(this)
         
-        uid = Firebase.auth.currentUser?.uid ?: getUserId(this)
-        if (uid == null) {
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        apiRepository = ApiRepository(this)
+        
+        // Check authentication
+        val token = SecurePreferences.getAuthToken(this)
+        if (token == null) {
             startActivity(Intent(this, Login::class.java))
             finish()
             return
@@ -62,43 +69,50 @@ class UserDetails : AppCompatActivity() {
     }
     
     private fun loadExistingUserData() {
-        uid?.let { userId ->
-            Firebase.firestore.collection("users").document(userId)
-                .get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        populateFields(document.data)
+        lifecycleScope.launch {
+            try {
+                val result = apiRepository.getPatientProfile()
+                when (result) {
+                    is NetworkResult.Success -> {
+                        val profile = result.data.profile
+                        if (profile != null) {
+                            populateFields(profile)
+                        }
+                    }
+                    is NetworkResult.Error -> {
+                        // Continue with empty form if data loading fails
+                        android.util.Log.e("UserDetails", "Error loading profile: ${result.message}")
+                    }
+                    is NetworkResult.Loading -> {
+                        // Show loading state if needed
                     }
                 }
-                .addOnFailureListener {
-                    // Continue with empty form if data loading fails
-                }
+            } catch (e: Exception) {
+                android.util.Log.e("UserDetails", "Error loading profile", e)
+            }
         }
     }
     
-    private fun populateFields(data: Map<String, Any>?) {
-        data?.let {
-            binding.etFirstName.setText(it["firstName"]?.toString() ?: "")
-            binding.etLastName.setText(it["lastName"]?.toString() ?: "")
-            binding.etPhone.setText(it["phoneNumber"]?.toString() ?: "")
-            binding.etDob.setText(it["dob"]?.toString() ?: "")
-            binding.etGender.setText(it["gender"]?.toString() ?: "")
-            binding.etLanguage.setText(it["language"]?.toString() ?: "")
-            
-            // Handle address object
-            val address = it["address"] as? Map<String, Any>
-            address?.let { addr ->
-                binding.etHouse.setText(addr["houseNo"]?.toString() ?: "")
-                binding.etLocality.setText(addr["locality"]?.toString() ?: "")
-                binding.etCity.setText(addr["city"]?.toString() ?: "")
-                binding.etState.setText(addr["state"]?.toString() ?: "")
-                binding.etPin.setText(addr["pinCode"]?.toString() ?: "")
-            }
-            
-            // Handle consent checkboxes
-            binding.cbConsentData.isChecked = it["consentDataUse"] as? Boolean ?: false
-            binding.cbConsentNotif.isChecked = it["consentNotifications"] as? Boolean ?: false
+    private fun populateFields(profile: com.example.healbridge.data.models.ProfileData) {
+        binding.etFirstName.setText(profile.firstName ?: "")
+        binding.etLastName.setText(profile.lastName ?: "")
+        binding.etPhone.setText(profile.phoneNumber ?: "")
+        binding.etDob.setText(profile.dob ?: "")
+        binding.etGender.setText(profile.gender ?: "")
+        binding.etLanguage.setText(profile.language ?: "")
+        
+        // Handle address
+        profile.address?.let { addr ->
+            binding.etHouse.setText(addr.houseNo ?: "")
+            binding.etLocality.setText(addr.locality ?: "")
+            binding.etCity.setText(addr.city ?: "")
+            binding.etState.setText(addr.state ?: "")
+            binding.etPin.setText(addr.pinCode ?: "")
         }
+        
+        // Handle consent checkboxes
+        binding.cbConsentData.isChecked = profile.consentDataUse ?: false
+        binding.cbConsentNotif.isChecked = profile.consentNotifications ?: false
     }
     
     private fun setupDropdowns() {
@@ -223,36 +237,151 @@ class UserDetails : AppCompatActivity() {
     }
     
     private fun saveUserData() {
-        uid?.let { userId ->
-            val data = hashMapOf(
-                "uid" to userId,
-                "firstName" to binding.etFirstName.text.toString().trim(),
-                "lastName" to binding.etLastName.text.toString().trim(),
-                "phoneNumber" to binding.etPhone.text.toString().trim(),
-                "dob" to binding.etDob.text.toString().trim().ifEmpty { null },
-                "gender" to binding.etGender.text.toString().trim().ifEmpty { null },
-                "address" to mapOf(
-                    "houseNo" to binding.etHouse.text.toString().trim().ifEmpty { null },
-                    "locality" to binding.etLocality.text.toString().trim().ifEmpty { null },
-                    "city" to binding.etCity.text.toString().trim().ifEmpty { null },
-                    "state" to binding.etState.text.toString().trim().ifEmpty { null },
-                    "pinCode" to binding.etPin.text.toString().trim().ifEmpty { null }
-                ),
-                "language" to binding.etLanguage.text.toString().trim().ifEmpty { null },
-                "consentDataUse" to binding.cbConsentData.isChecked,
-                "consentNotifications" to binding.cbConsentNotif.isChecked,
-                "updatedAt" to System.currentTimeMillis()
-            )
-
-            Firebase.firestore.collection("users").document(userId)
-                .set(data, com.google.firebase.firestore.SetOptions.merge())
-                .addOnSuccessListener {
-                    startActivity(Intent(this, Home::class.java))
-                    finish()
+        val firstName = binding.etFirstName.text.toString().trim()
+        val lastName = binding.etLastName.text.toString().trim()
+        val phoneNumber = binding.etPhone.text.toString().trim()
+        val dob = binding.etDob.text.toString().trim()
+        val gender = binding.etGender.text.toString().trim()
+        
+        // Validate required fields
+        if (firstName.isEmpty() || lastName.isEmpty()) {
+            Toast.makeText(this, "First name and last name are required", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        if (dob.isEmpty()) {
+            Toast.makeText(this, "Date of birth is required", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        if (gender.isEmpty()) {
+            Toast.makeText(this, "Gender is required", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        // Build profile data
+        val profileData = mutableMapOf<String, Any>(
+            "firstName" to firstName,
+            "lastName" to lastName,
+            "dob" to dob,
+            "gender" to gender
+        )
+        
+        if (phoneNumber.isNotEmpty()) {
+            profileData["phoneNumber"] = phoneNumber
+        }
+        
+        // Build address if any field is filled
+        val houseNo = binding.etHouse.text.toString().trim()
+        val locality = binding.etLocality.text.toString().trim()
+        val city = binding.etCity.text.toString().trim()
+        val state = binding.etState.text.toString().trim()
+        val pinCode = binding.etPin.text.toString().trim()
+        
+        if (houseNo.isNotEmpty() || locality.isNotEmpty() || city.isNotEmpty() || 
+            state.isNotEmpty() || pinCode.isNotEmpty()) {
+            val addressMap = mutableMapOf<String, String?>()
+            if (houseNo.isNotEmpty()) addressMap["houseNo"] = houseNo
+            if (locality.isNotEmpty()) addressMap["locality"] = locality
+            if (city.isNotEmpty()) addressMap["city"] = city
+            if (state.isNotEmpty()) addressMap["state"] = state
+            if (pinCode.isNotEmpty()) addressMap["pinCode"] = pinCode
+            profileData["address"] = addressMap
+        }
+        
+        val language = binding.etLanguage.text.toString().trim()
+        if (language.isNotEmpty()) {
+            profileData["language"] = language
+        }
+        
+        profileData["consentDataUse"] = binding.cbConsentData.isChecked
+        profileData["consentNotifications"] = binding.cbConsentNotif.isChecked
+        
+        // Show loading
+        binding.btnSave.isEnabled = false
+        binding.btnSave.text = "Saving..."
+        
+        lifecycleScope.launch {
+            try {
+                // Check if profile exists first
+                val profileCheck = apiRepository.getPatientProfile()
+                val hasProfile = when (profileCheck) {
+                    is NetworkResult.Success -> profileCheck.data.hasProfile == true && profileCheck.data.profile != null
+                    else -> false
                 }
-                .addOnFailureListener {
-                    // Handle error
+                
+                if (!hasProfile) {
+                    // Create new profile - backend expects name, dob, gender, emergencyContact
+                    val emergencyContactPhone = if (phoneNumber.length == 10) phoneNumber else "1234567890"
+                    val createProfileData = mapOf(
+                        "name" to "$firstName $lastName",
+                        "dob" to dob,
+                        "gender" to gender,
+                        "allergies" to "",
+                        "chronicConditions" to "",
+                        "emergencyContact" to emergencyContactPhone
+                    )
+                    
+                    // Call create profile endpoint
+                    val createResult = apiRepository.createPatientProfile(createProfileData)
+                    when (createResult) {
+                        is NetworkResult.Success -> {
+                            // Profile created, now update with additional data if needed
+                            if (profileData.size > 4) { // More than just firstName, lastName, dob, gender
+                                val updateResult = apiRepository.updatePatientProfile(profileData)
+                                when (updateResult) {
+                                    is NetworkResult.Success -> {
+                                        Toast.makeText(this@UserDetails, "Profile saved successfully", Toast.LENGTH_SHORT).show()
+                                        startActivity(Intent(this@UserDetails, Home::class.java))
+                                        finish()
+                                    }
+                                    is NetworkResult.Error -> {
+                                        // Profile created but update failed - still navigate
+                                        Toast.makeText(this@UserDetails, "Profile created. Some details may need updating.", Toast.LENGTH_SHORT).show()
+                                        startActivity(Intent(this@UserDetails, Home::class.java))
+                                        finish()
+                                    }
+                                    is NetworkResult.Loading -> {}
+                                }
+                            } else {
+                                // No additional data to update
+                                Toast.makeText(this@UserDetails, "Profile saved successfully", Toast.LENGTH_SHORT).show()
+                                startActivity(Intent(this@UserDetails, Home::class.java))
+                                finish()
+                            }
+                        }
+                        is NetworkResult.Error -> {
+                            binding.btnSave.isEnabled = true
+                            binding.btnSave.text = "Save"
+                            Toast.makeText(this@UserDetails, "Error creating profile: ${createResult.message}", Toast.LENGTH_LONG).show()
+                        }
+                        is NetworkResult.Loading -> {}
+                    }
+                } else {
+                    // Update existing profile
+                    val result = apiRepository.updatePatientProfile(profileData)
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            Toast.makeText(this@UserDetails, "Profile saved successfully", Toast.LENGTH_SHORT).show()
+                            startActivity(Intent(this@UserDetails, Home::class.java))
+                            finish()
+                        }
+                        is NetworkResult.Error -> {
+                            binding.btnSave.isEnabled = true
+                            binding.btnSave.text = "Save"
+                            Toast.makeText(this@UserDetails, "Error: ${result.message}", Toast.LENGTH_LONG).show()
+                        }
+                        is NetworkResult.Loading -> {
+                            // Loading state already shown
+                        }
+                    }
                 }
+            } catch (e: Exception) {
+                binding.btnSave.isEnabled = true
+                binding.btnSave.text = "Save"
+                android.util.Log.e("UserDetails", "Error saving profile", e)
+                Toast.makeText(this@UserDetails, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 }

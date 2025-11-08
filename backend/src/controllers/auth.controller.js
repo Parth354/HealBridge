@@ -1,18 +1,10 @@
 import authService from '../services/auth.service.js';
 
 class AuthController {
-  // Send OTP to phone number (DOCTORS/STAFF ONLY)
+  // Send OTP to phone number (PATIENTS, DOCTORS, STAFF)
   async sendOTP(req, res) {
     try {
-      let { phone, role } = req.body;
-      
-      // Block patient OTP requests
-      if (role === 'PATIENT') {
-        return res.status(403).json({ 
-          error: 'Patient login via OTP is disabled. Please use Gmail login.',
-          useFirebaseAuth: true
-        });
-      }
+      let { phone, role = 'PATIENT' } = req.body;
 
       if (!phone) {
         return res.status(400).json({ error: 'Phone number is required' });
@@ -26,24 +18,16 @@ class AuthController {
     }
   }
 
-  // Verify OTP and login/register (DOCTORS/STAFF ONLY)
+  // Verify OTP and login/register (PATIENTS, DOCTORS, STAFF)
   async verifyOTP(req, res) {
     try {
-      const { phone, otp, role } = req.body;
-
-      // Block patient OTP verification
-      if (role === 'PATIENT') {
-        return res.status(403).json({ 
-          error: 'Patient login via OTP is disabled. Please use Gmail login.',
-          useFirebaseAuth: true
-        });
-      }
+      const { phone, otp, role = 'PATIENT' } = req.body;
 
       if (!phone || !otp) {
         return res.status(400).json({ error: 'Phone and OTP are required' });
       }
 
-      const result = await authService.verifyOTP(phone, otp, role || 'DOCTOR');
+      const result = await authService.verifyOTP(phone, otp, role);
       res.json(result);
     } catch (error) {
       console.error('Verify OTP error:', error);
@@ -51,12 +35,33 @@ class AuthController {
     }
   }
 
-  // Create patient profile (DEPRECATED - Use Firestore directly)
+  // Create patient profile
   async createPatientProfile(req, res) {
     try {
-      return res.status(410).json({ 
-        error: 'This endpoint is deprecated. Patient profiles are managed in Firebase Firestore.',
-        message: 'Please update your patient profile in the mobile app. It will automatically sync to Firestore.'
+      const userId = req.user.userId;
+      const profileData = req.body;
+
+      const patient = await authService.createPatientProfile(userId, profileData);
+      
+      // Parse name for response
+      const nameParts = patient.name.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      res.json({ 
+        success: true, 
+        profile: {
+          firstName,
+          lastName,
+          email: patient.user?.email || '',
+          phoneNumber: patient.user?.phone || '',
+          dob: patient.dob.toISOString().split('T')[0],
+          gender: patient.gender,
+          allergies: patient.allergies ? patient.allergies.split(', ').filter(a => a.trim()) : [],
+          conditions: patient.chronicConditions ? patient.chronicConditions.split(', ').filter(c => c.trim()) : [],
+          emergencyContactPhone: patient.emergencyContact
+        },
+        hasProfile: true
       });
     } catch (error) {
       console.error('Create patient profile error:', error);
@@ -129,44 +134,6 @@ class AuthController {
     }
   }
 
-  // Firebase authentication: Login/Register with Firebase ID token
-  async authenticateWithFirebase(req, res) {
-    try {
-      const { firebaseToken, role } = req.body;
-
-      if (!firebaseToken) {
-        return res.status(400).json({ error: 'Firebase token is required' });
-      }
-
-      const result = await authService.authenticateWithFirebase(
-        firebaseToken, 
-        role || 'PATIENT'
-      );
-      
-      res.json(result);
-    } catch (error) {
-      console.error('Firebase authentication error:', error);
-      res.status(401).json({ error: error.message });
-    }
-  }
-
-  // Sync Firebase user data
-  async syncFirebaseUser(req, res) {
-    try {
-      const userId = req.user.userId;
-      const { firebaseToken } = req.body;
-
-      if (!firebaseToken) {
-        return res.status(400).json({ error: 'Firebase token is required' });
-      }
-
-      const result = await authService.syncFirebaseUser(userId, firebaseToken);
-      res.json(result);
-    } catch (error) {
-      console.error('Sync Firebase user error:', error);
-      res.status(500).json({ error: error.message });
-    }
-  }
 }
 
 export default new AuthController();

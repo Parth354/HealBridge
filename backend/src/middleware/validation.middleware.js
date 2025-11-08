@@ -35,16 +35,13 @@ const schemas = {
       .messages({
         'string.pattern.base': 'Phone number must be 10 digits'
       }),
-    role: Joi.string().valid('DOCTOR', 'STAFF').optional()
+    role: Joi.string().valid('PATIENT', 'DOCTOR', 'STAFF').optional().default('PATIENT')
   }),
 
   verifyOTP: Joi.object({
     phone: Joi.string().pattern(/^[0-9]{10}$/).required(),
     otp: Joi.string().length(6).required(),
-    role: Joi.string().valid('DOCTOR', 'STAFF').default('DOCTOR') // PATIENT removed
-      .messages({
-        'any.only': 'OTP authentication is only available for doctors and staff. Patients must use Firebase/Gmail login.'
-      })
+    role: Joi.string().valid('PATIENT', 'DOCTOR', 'STAFF').default('PATIENT')
   }),
 
   createPatientProfile: Joi.object({

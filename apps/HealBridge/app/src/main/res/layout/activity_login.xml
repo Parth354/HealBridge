@@ -12,7 +12,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/white"
-        android:minHeight="@dimen/match_parent">
+        android:minHeight="@dimen/match_parent"
+        android:padding="24dp">
 
         <!-- Top Section with Logo and Branding -->
         <androidx.constraintlayout.widget.ConstraintLayout
@@ -20,7 +21,7 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:background="@drawable/loginpost"
-            app:layout_constraintDimensionRatio="1:0.6"
+            app:layout_constraintDimensionRatio="1:0.5"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent">
@@ -37,7 +38,7 @@
                 android:id="@+id/appLogo"
                 android:layout_width="80dp"
                 android:layout_height="80dp"
-                android:layout_marginTop="60dp"
+                android:layout_marginTop="40dp"
                 android:src="@drawable/logofull"
                 android:scaleType="centerCrop"
                 app:layout_constraintEnd_toEndOf="parent"
@@ -75,27 +76,23 @@
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
-        <!-- Bottom Section with Login Form -->
+        <!-- Login Form Section -->
         <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/bottomSection"
+            android:id="@+id/loginFormSection"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_marginTop="-40dp"
-            android:background="@drawable/rounded_top_background"
-            android:paddingHorizontal="32dp"
-            android:paddingTop="30dp"
-            android:paddingBottom="32dp"
-            app:layout_constraintBottom_toBottomOf="parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:padding="16dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/topSection">
 
-            <!-- Welcome Text -->
+            <!-- Welcome Title -->
             <TextView
                 android:id="@+id/welcomeTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Get Started"
+                android:text="Welcome Back"
                 android:textColor="@color/black"
                 android:textSize="28sp"
                 android:textStyle="bold"
@@ -110,7 +107,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="Connect with trusted doctors and manage your health"
+                android:text="Enter your phone number to continue"
                 android:textAlignment="center"
                 android:textColor="@color/black"
                 android:textSize="16sp"
@@ -119,72 +116,109 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@+id/welcomeTitle" />
 
-            <!-- Lottie Animation -->
-            <com.airbnb.lottie.LottieAnimationView
-                android:id="@+id/lottieAnimationView"
-                android:layout_width="200dp"
-                android:layout_height="100dp"
-                android:layout_marginTop="24dp"
+            <!-- Phone Number Input -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/phoneInputLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:hint="Phone Number"
+                app:boxStrokeColor="@color/primary"
+                app:boxStrokeWidth="2dp"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@+id/welcomeSubtitle"
-                app:lottie_autoPlay="true"
-                app:lottie_loop="true"
-                app:lottie_rawRes="@raw/welcome" />
+                app:layout_constraintTop_toBottomOf="@+id/welcomeSubtitle">
 
-            <!-- Google Sign In Button -->
-            <androidx.cardview.widget.CardView
-                android:id="@+id/googleSignInButton"
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etPhoneNumber"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="phone"
+                    android:maxLength="10"
+                    android:textSize="16sp" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- OTP Input (initially hidden) -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/otpInputLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Enter OTP"
+                android:visibility="gone"
+                app:boxStrokeColor="@color/primary"
+                app:boxStrokeWidth="2dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/phoneInputLayout">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etOtp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:maxLength="6"
+                    android:textSize="16sp" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Send OTP / Verify OTP Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSendOtp"
                 android:layout_width="0dp"
                 android:layout_height="56dp"
-                android:layout_marginTop="32dp"
-                android:backgroundTint="@color/white"
-                android:clickable="true"
-                android:focusable="true"
-                android:foreground="?android:attr/selectableItemBackground"
-                app:cardCornerRadius="28dp"
-                app:cardElevation="4dp"
+                android:layout_marginTop="24dp"
+                android:text="Send OTP"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                app:cornerRadius="12dp"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@+id/lottieAnimationView">
+                app:layout_constraintTop_toBottomOf="@+id/otpInputLayout" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:gravity="center"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="24dp">
-
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:layout_marginEnd="12dp"
-                        android:src="@drawable/common_google_signin_btn_icon_dark_normal" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Continue with Google"
-                        android:textColor="@color/black"
-                        android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:fontFamily="sans-serif-medium" />
-
-                </LinearLayout>
-
-            </androidx.cardview.widget.CardView>
+            <!-- Change Phone Number Button (initially hidden) -->
+            <TextView
+                android:id="@+id/btnChangePhone"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Change Phone Number"
+                android:textColor="@color/primary"
+                android:textSize="14sp"
+                android:visibility="gone"
+                android:clickable="true"
+                android:focusable="true"
+                android:padding="8dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/btnSendOtp" />
 
             <!-- Loading Indicator -->
             <ProgressBar
-                android:id="@+id/loading_indicator"
+                android:id="@+id/loadingIndicator"
                 android:layout_width="24dp"
                 android:layout_height="24dp"
-                android:layout_marginTop="24dp"
-                android:indeterminateTint="#4285F4"
+                android:layout_marginTop="16dp"
+                android:indeterminateTint="@color/primary"
                 android:visibility="gone"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@+id/googleSignInButton" />
+                app:layout_constraintTop_toBottomOf="@+id/btnChangePhone" />
+
+            <!-- Error Message -->
+            <TextView
+                android:id="@+id/tvError"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:textColor="@android:color/holo_red_dark"
+                android:textSize="14sp"
+                android:visibility="gone"
+                android:gravity="center"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/loadingIndicator" />
 
             <!-- Privacy Notice -->
             <TextView
@@ -199,94 +233,12 @@
                 android:alpha="0.6"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@+id/loading_indicator" />
-
-            <!-- Features List -->
-            <LinearLayout
-                android:id="@+id/featuresList"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="32dp"
-                android:orientation="vertical"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@+id/privacyNotice">
-
-                <!-- Feature 1 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <View
-                        android:layout_width="6dp"
-                        android:layout_height="6dp"
-                        android:layout_marginEnd="12dp"
-                        android:background="@drawable/circle_primary" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Book appointments with verified doctors"
-                        android:textColor="@color/black"
-                        android:textSize="14sp"
-                        android:alpha="0.8" />
-
-                </LinearLayout>
-
-                <!-- Feature 2 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <View
-                        android:layout_width="6dp"
-                        android:layout_height="6dp"
-                        android:layout_marginEnd="12dp"
-                        android:background="@drawable/circle_primary" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Get reminders and navigation to clinics"
-                        android:textColor="@color/black"
-                        android:textSize="14sp"
-                        android:alpha="0.8" />
-
-                </LinearLayout>
-
-                <!-- Feature 3 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <View
-                        android:layout_width="6dp"
-                        android:layout_height="6dp"
-                        android:layout_marginEnd="12dp"
-                        android:background="@drawable/circle_primary" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Access your medical records anytime"
-                        android:textColor="@color/black"
-                        android:textSize="14sp"
-                        android:alpha="0.8" />
-
-                </LinearLayout>
-
-            </LinearLayout>
+                app:layout_constraintTop_toBottomOf="@+id/tvError" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
+
+</ScrollView>
 
 </ScrollView>

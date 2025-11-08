@@ -4,6 +4,10 @@ import android.content.Context
 import com.example.healbridge.cache.CacheManager
 import com.example.healbridge.data.NetworkResult
 import com.example.healbridge.data.models.*
+import com.example.healbridge.data.models.OTPRequest
+import com.example.healbridge.data.models.OTPResponse
+import com.example.healbridge.data.models.VerifyOTPRequest
+import com.example.healbridge.data.models.LoginResponse
 
 class ApiRepository(private val context: Context? = null) {
     private val apiService = ApiClient.apiService
@@ -445,6 +449,20 @@ class ApiRepository(private val context: Context? = null) {
         }
     }
     
+    suspend fun createPatientProfile(profile: Map<String, Any>): NetworkResult<ProfileResponse> {
+        return try {
+            val response = apiService.createPatientProfile(profile)
+            if (response.isSuccessful && response.body() != null) {
+                NetworkResult.Success(response.body()!!)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                NetworkResult.Error(errorBody ?: "Failed to create profile", response.code())
+            }
+        } catch (e: Exception) {
+            NetworkResult.Error(e.message ?: "Network error")
+        }
+    }
+    
     // Triage with retry logic
     suspend fun analyzeSymptoms(request: TriageRequest, maxRetries: Int = 2): NetworkResult<TriageResponse> {
         var lastException: Exception? = null
@@ -566,6 +584,37 @@ class ApiRepository(private val context: Context? = null) {
                 NetworkResult.Success(response.body()!!)
             } else {
                 NetworkResult.Error("Health check failed", response.code())
+            }
+        } catch (e: Exception) {
+            NetworkResult.Error(e.message ?: "Network error")
+        }
+    }
+    
+    // OTP Authentication
+    suspend fun sendOTP(phone: String, role: String = "PATIENT"): NetworkResult<OTPResponse> {
+        return try {
+            val request = OTPRequest(phone, role)
+            val response = apiService.sendOTP(request)
+            if (response.isSuccessful && response.body() != null) {
+                NetworkResult.Success(response.body()!!)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                NetworkResult.Error(errorBody ?: "Failed to send OTP", response.code())
+            }
+        } catch (e: Exception) {
+            NetworkResult.Error(e.message ?: "Network error")
+        }
+    }
+    
+    suspend fun verifyOTP(phone: String, otp: String, role: String = "PATIENT"): NetworkResult<LoginResponse> {
+        return try {
+            val request = VerifyOTPRequest(phone, otp, role)
+            val response = apiService.verifyOTP(request)
+            if (response.isSuccessful && response.body() != null) {
+                NetworkResult.Success(response.body()!!)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                NetworkResult.Error(errorBody ?: "Invalid OTP", response.code())
             }
         } catch (e: Exception) {
             NetworkResult.Error(e.message ?: "Network error")
