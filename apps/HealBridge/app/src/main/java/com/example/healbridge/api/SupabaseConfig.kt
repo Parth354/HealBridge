@@ -20,14 +20,20 @@ object SupabaseConfig {
     const val POSTGREST_URL = "$SUPABASE_URL/rest/v1"
     
     val client: SupabaseClient by lazy {
-        createSupabaseClient(
-            supabaseUrl = SUPABASE_URL,
-            supabaseKey = SUPABASE_ANON_KEY
-        ) {
-            install(Postgrest)
-            install(Storage)
-            install(Functions)
-            install(Realtime)
+        try {
+            createSupabaseClient(
+                supabaseUrl = SUPABASE_URL,
+                supabaseKey = SUPABASE_ANON_KEY
+            ) {
+                install(Postgrest)
+                install(Storage)
+                install(Functions)
+                install(Realtime)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SupabaseConfig", "Error creating Supabase client", e)
+            // Return a minimal client or handle error appropriately
+            throw e
         }
     }
 }

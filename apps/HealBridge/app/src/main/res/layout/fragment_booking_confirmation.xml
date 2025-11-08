@@ -220,9 +220,12 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/confirmButton"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="56dp"
             android:text="Confirm Appointment"
-            android:textSize="16sp" />
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:cornerRadius="12dp"
+            android:layout_marginBottom="8dp" />
 
         <!-- Success Card -->
         <com.google.android.material.card.MaterialCardView
@@ -272,23 +275,25 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/shareButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Share"
-                        android:layout_marginEnd="8dp"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:textColor="@android:color/white" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/shareButton"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:text="Share"
+                    android:layout_marginEnd="8dp"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    app:cornerRadius="8dp"
+                    android:textColor="@android:color/white" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/copyLinkButton"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="48dp"
                         android:layout_weight="1"
                         android:text="Copy Link"
                         style="@style/Widget.Material3.Button.TextButton"
+                        app:cornerRadius="8dp"
                         android:textColor="@android:color/white" />
 
                 </LinearLayout>
@@ -296,10 +301,13 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/goHomeButton"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="56dp"
                     android:text="Go to Home"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
                     android:layout_marginTop="8dp"
                     style="@style/Widget.Material3.Button.UnelevatedButton"
+                    app:cornerRadius="12dp"
                     app:backgroundTint="@android:color/white"
                     android:textColor="@color/success" />
 

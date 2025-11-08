@@ -21,7 +21,7 @@ const MedicationTracker = ({ patientId }) => {
   const { data: medications, isLoading } = useQuery({
     queryKey: ['patient-medications', patientId],
     queryFn: async () => {
-      const response = await api.get(`/api/doctor/patients/${patientId}/medications`);
+      const response = await api.get(`/doctor/patients/${patientId}/medications`);
       return response.data.medications || [];
     }
   });

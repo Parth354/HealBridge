@@ -53,15 +53,36 @@ const authenticate = async (req, res, next) => {
           // Import sync service to sync Firebase profile to Prisma
           const syncService = (await import('../services/sync.service.js')).default;
           
+          // Default to PATIENT role for Firebase authentication
+          // Only set to DOCTOR if explicitly specified in token claims
+          // The sync service will check Firestore to determine if user is a doctor
+          let role = 'PATIENT';
+          if (firebaseDecoded.role === 'DOCTOR' || firebaseDecoded.role === 'doctor') {
+            role = 'DOCTOR';
+          }
+          
           // Auto-create user from Firebase token and sync Firebase profile
+          // The getOrCreateUser will check Firestore and adjust role if needed
           user = await retryDatabaseQuery(async () => {
             return await syncService.getOrCreateUser({
               uid: firebaseDecoded.uid,
               email: firebaseDecoded.email,
               email_verified: firebaseDecoded.email_verified
-            }, 'PATIENT');
+            }, role);
           });
-          console.log(`✅ Auto-created Firebase user: ${user.id}`);
+          console.log(`✅ Auto-created Firebase user: ${user.id} with role: ${user.role}`);
+          
+          // If user is PATIENT, ensure patient profile is synced from Firestore
+          if (user.role === 'PATIENT' && !user.patient) {
+            await syncService.syncFirebaseToPrismaPatient(firebaseDecoded.uid);
+            // Refresh user to get updated patient profile
+            user = await retryDatabaseQuery(async () => {
+              return await prisma.user.findUnique({
+                where: { firebase_uid: firebaseDecoded.uid },
+                include: { patient: true, doctor: true }
+              });
+            });
+          }
         }
 
         console.log(`✅ Authenticated via Firebase token: ${user.id}`);
@@ -130,10 +151,12 @@ const authenticate = async (req, res, next) => {
     // Attach user info to request
     req.user = {
       userId: user.id,
+      id: user.id, // Also include as id for compatibility
       role: user.role,
       patientId: user.patient?.id,
       doctorId: user.doctor?.id,
-      firebaseUid: user.firebase_uid
+      firebaseUid: user.firebase_uid,
+      firebase_uid: user.firebase_uid // Include both formats for compatibility
     };
 
     next();
@@ -177,9 +200,9 @@ const requireRole = (role) => {
   };
 };
 
-// Require patient profile (DEPRECATED - Patient data now in Firestore)
+// Require patient profile - Auto-syncs from Firestore if missing
 const requirePatientProfile = async (req, res, next) => {
-  // For patients, check Firebase UID instead of patientId
+  // For patients, check Firebase UID and ensure profile is synced to Prisma
   if (req.user.role === 'PATIENT') {
     if (!req.user.firebaseUid) {
       return res.status(403).json({ 
@@ -187,7 +210,36 @@ const requirePatientProfile = async (req, res, next) => {
         message: 'Please login with Gmail to continue'
       });
     }
-    // Patient profile validation happens in Firestore
+    
+    // If patientId is missing, try to sync from Firestore
+    if (!req.user.patientId) {
+      try {
+        const syncService = (await import('../services/sync.service.js')).default;
+        
+        // Sync Firebase profile to Prisma Patient
+        await syncService.syncFirebaseToPrismaPatient(req.user.firebaseUid);
+        
+        // Refresh user data to get updated patientId
+        const updatedUser = await prisma.user.findUnique({
+          where: { id: req.user.userId },
+          include: { patient: true }
+        });
+        
+        if (updatedUser?.patient) {
+          req.user.patientId = updatedUser.patient.id;
+          console.log(`✅ Auto-synced patient profile for user: ${req.user.userId}`);
+        } else {
+          // Profile doesn't exist in Firestore - allow to proceed but booking will need profile
+          console.log(`⚠️  Patient profile not found in Firestore for: ${req.user.firebaseUid}`);
+          // Don't block - let the controller handle missing profile
+        }
+      } catch (error) {
+        console.error('Error auto-syncing patient profile:', error);
+        // Don't block - allow to proceed, controller will handle error
+      }
+    }
+    
+    // Allow to proceed (patientId might still be null if no Firestore profile exists)
     next();
   } else if (!req.user.patientId) {
     return res.status(403).json({ error: 'Patient profile required' });
@@ -199,7 +251,32 @@ const requirePatientProfile = async (req, res, next) => {
 // Require doctor profile
 const requireDoctorProfile = async (req, res, next) => {
   if (!req.user.doctorId) {
-    return res.status(403).json({ error: 'Doctor profile required' });
+    // Try to auto-create doctor profile from Firestore if user exists
+    if (req.user.firebase_uid && req.user.role === 'DOCTOR') {
+      try {
+        const syncService = (await import('../services/sync.service.js')).default;
+        await syncService.syncFirebaseToPrismaDoctor(req.user.firebase_uid);
+        
+        // Refresh user data
+        const updatedUser = await prisma.user.findUnique({
+          where: { id: req.user.id },
+          include: { doctor: true }
+        });
+        
+        if (updatedUser?.doctor) {
+          req.user.doctorId = updatedUser.doctor.id;
+          console.log(`✅ Auto-created doctor profile for user: ${req.user.id}`);
+          return next();
+        }
+      } catch (error) {
+        console.error('Error auto-creating doctor profile:', error);
+      }
+    }
+    
+    return res.status(403).json({ 
+      error: 'Doctor profile required',
+      message: 'Please complete your doctor profile setup'
+    });
   }
   next();
 };

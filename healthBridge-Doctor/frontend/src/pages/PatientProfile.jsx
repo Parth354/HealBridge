@@ -35,7 +35,7 @@ const PatientProfile = () => {
   const { data: patient, isLoading, refetch } = useQuery({
     queryKey: ['patient', patientId],
     queryFn: async () => {
-      const response = await api.get(`/api/doctor/patients/${patientId}`);
+      const response = await api.get(`/doctor/patients/${patientId}`);
       return response.data.patient;
     },
     enabled: !!patientId
@@ -45,7 +45,7 @@ const PatientProfile = () => {
   const { data: summary } = useQuery({
     queryKey: ['patient-summary', patientId],
     queryFn: async () => {
-      const response = await api.get(`/api/doctor/patients/${patientId}/summary`);
+      const response = await api.get(`/doctor/patients/${patientId}/summary`);
       return response.data.summary;
     },
     enabled: !!patientId

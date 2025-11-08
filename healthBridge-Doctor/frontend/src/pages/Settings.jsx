@@ -28,7 +28,7 @@ const Settings = () => {
     queryKey: ['doctor-profile'],
     queryFn: async () => {
       try {
-        const response = await api.get('/api/doctor/profile');
+        const response = await api.get('/doctor/profile');
         return response.data.doctor;
       } catch (error) {
         // Handle different error cases
@@ -97,7 +97,7 @@ const Settings = () => {
   const updateProfileMutation = useMutation({
     mutationFn: async (data) => {
       try {
-        const response = await api.put('/api/doctor/profile', data);
+        const response = await api.put('/doctor/profile', data);
         return response.data;
       } catch (error) {
         // Enhance error with status code for better handling
@@ -219,7 +219,7 @@ const Settings = () => {
   const { data: clinicsData, isLoading: clinicsLoading } = useQuery({
     queryKey: ['doctor-clinics'],
     queryFn: async () => {
-      const response = await api.get('/api/doctor/clinics');
+      const response = await api.get('/doctor/clinics');
       return response.data.clinics;
     }
   });
@@ -227,7 +227,7 @@ const Settings = () => {
   // Add clinic mutation
   const addClinicMutation = useMutation({
     mutationFn: async (data) => {
-      const response = await api.post('/api/doctor/clinics', {
+      const response = await api.post('/doctor/clinics', {
         ...data,
         lat: parseFloat(data.lat),
         lon: parseFloat(data.lon),

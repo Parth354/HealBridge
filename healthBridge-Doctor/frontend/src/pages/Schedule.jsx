@@ -40,7 +40,7 @@ const Schedule = () => {
   });
 
   const { data: appointmentsData, isLoading, refetch } = useAppointments(
-    selectedDate.toISOString().split('T')[0]
+    format(selectedDate, 'yyyy-MM-dd')
   );
 
   const startConsultation = useStartConsultation();
@@ -96,9 +96,10 @@ const Schedule = () => {
   // Set default date when modal opens
   useEffect(() => {
     if (showAddSlotModal && !slotForm.date) {
+      // Use format to get local date string, not ISO (which can be off by timezone)
       setSlotForm(prev => ({
         ...prev,
-        date: selectedDate.toISOString().split('T')[0]
+        date: format(selectedDate, 'yyyy-MM-dd')
       }));
     }
   }, [showAddSlotModal, selectedDate]);
@@ -128,11 +129,12 @@ const Schedule = () => {
   const fetchScheduleBlocks = async () => {
     try {
       setIsLoadingSlots(true);
+      // Use format function to get local date string (YYYY-MM-DD) to avoid timezone issues
       const startDate = viewMode === 'day' 
-        ? selectedDate.toISOString().split('T')[0]
+        ? format(selectedDate, 'yyyy-MM-dd')
         : format(startOfWeek(selectedDate, { weekStartsOn: 0 }), 'yyyy-MM-dd');
       const endDate = viewMode === 'day'
-        ? selectedDate.toISOString().split('T')[0]
+        ? format(selectedDate, 'yyyy-MM-dd')
         : format(endOfWeek(selectedDate, { weekStartsOn: 0 }), 'yyyy-MM-dd');
       
       const response = await getSchedule(startDate, endDate);
@@ -171,11 +173,13 @@ const Schedule = () => {
 
   const handleMarkLeave = async () => {
     try {
+      // Use selectedDate directly and set hours in local timezone
       const startTs = new Date(selectedDate);
       startTs.setHours(0, 0, 0, 0);
       const endTs = new Date(selectedDate);
       endTs.setHours(23, 59, 59, 999);
       
+      // Convert to ISO for backend
       await markUnavailable(startTs.toISOString(), endTs.toISOString(), 'HOLIDAY');
       showSuccess('Leave marked successfully');
       handleRefetch();
@@ -239,10 +243,21 @@ const Schedule = () => {
         showSuccess('Recurring schedule created successfully!');
       } else {
         // Create one-time schedule
-        // Construct proper Date objects for ISO timestamps
-        const startDate = new Date(`${slotForm.date}T${slotForm.start_time}:00`);
-        const endDate = new Date(`${slotForm.date}T${slotForm.end_time}:00`);
+        // Parse date and time components separately to avoid timezone issues
+        const dateStr = slotForm.date; // YYYY-MM-DD format
+        const startTimeStr = slotForm.start_time; // HH:MM format
+        const endTimeStr = slotForm.end_time; // HH:MM format
         
+        // Split date into components
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const [startHours, startMinutes] = startTimeStr.split(':').map(Number);
+        const [endHours, endMinutes] = endTimeStr.split(':').map(Number);
+        
+        // Create date objects using local timezone (month is 0-indexed in JavaScript Date)
+        const startDate = new Date(year, month - 1, day, startHours, startMinutes, 0, 0);
+        const endDate = new Date(year, month - 1, day, endHours, endMinutes, 0, 0);
+        
+        // Convert to ISO string for backend (preserves the local time intent)
         const scheduleData = {
           clinicId: slotForm.clinic_id,
           startTs: startDate.toISOString(),
@@ -253,6 +268,8 @@ const Schedule = () => {
         };
         
         console.log('Sending schedule data:', scheduleData);
+        console.log('Local start date:', startDate.toString());
+        console.log('ISO start date:', startDate.toISOString());
 
         await createSchedule(scheduleData);
         showSuccess('Schedule slot created successfully!');

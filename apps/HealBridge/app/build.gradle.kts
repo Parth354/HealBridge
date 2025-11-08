@@ -115,6 +115,9 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.client.logging)
     implementation(libs.ktor.client.auth)
+    // HttpTimeout plugin for Ktor (required by Supabase SDK)
+    implementation("io.ktor:ktor-client-core:2.3.12")
+    implementation("io.ktor:ktor-client-android:2.3.12")
 
     // WorkManager for background tasks and notifications
     implementation("androidx.work:work-runtime-ktx:2.9.0")

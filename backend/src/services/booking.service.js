@@ -337,12 +337,16 @@ class BookingService {
     const where = { doctor_id: doctorId };
     
     if (date) {
-      const startOfDay = new Date(date);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(date);
-      endOfDay.setHours(23, 59, 59, 999);
+      // Date comes as "2024-01-15" (YYYY-MM-DD format)
+      // Parse as UTC to avoid timezone issues - this ensures consistent date matching
+      // When querying for "2024-01-15", we want all appointments on that calendar day in UTC
+      const startOfDay = new Date(date + 'T00:00:00.000Z');
+      const endOfDay = new Date(date + 'T23:59:59.999Z');
       
-      where.startTs = { gte: startOfDay, lte: endOfDay };
+      where.startTs = { 
+        gte: startOfDay, 
+        lte: endOfDay 
+      };
     }
 
     return await prisma.appointment.findMany({

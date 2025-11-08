@@ -354,6 +354,69 @@ class FirestoreService {
   }
 
   /**
+   * Get doctor profile from Firestore by Firebase UID
+   * Doctors might be stored in a separate collection or in the users collection with a role field
+   * @param {string} firebaseUid - Firebase user UID
+   * @returns {Promise<Object|null>} Doctor profile data
+   */
+  async getDoctorProfile(firebaseUid) {
+    try {
+      if (!this.db) {
+        throw new Error('Firestore not initialized');
+      }
+
+      // Try doctors collection first
+      const doctorDocRef = this.db.collection('doctors').doc(firebaseUid);
+      const doctorDoc = await doctorDocRef.get();
+      
+      if (doctorDoc.exists) {
+        const data = doctorDoc.data();
+        return {
+          firebase_uid: firebaseUid,
+          firstName: data.firstName || data.name?.split(' ')[0] || '',
+          lastName: data.lastName || data.name?.split(' ').slice(1).join(' ') || '',
+          name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Doctor',
+          email: data.email || null,
+          phone: data.phone || data.phoneNumber || null,
+          specialties: Array.isArray(data.specialties) ? data.specialties : (data.specialty ? [data.specialty] : []),
+          licenseNo: data.licenseNo || data.license || null,
+          verifiedStatus: data.verifiedStatus || data.verified ? 'VERIFIED' : 'PENDING',
+          ...data
+        };
+      }
+
+      // Try users collection with role = 'doctor'
+      const userDocRef = this.db.collection('users').doc(firebaseUid);
+      const userDoc = await userDocRef.get();
+      
+      if (userDoc.exists) {
+        const data = userDoc.data();
+        // Check if user is a doctor
+        if (data.role === 'DOCTOR' || data.role === 'doctor' || data.userType === 'doctor') {
+          return {
+            firebase_uid: firebaseUid,
+            firstName: data.firstName || data.name?.split(' ')[0] || '',
+            lastName: data.lastName || data.name?.split(' ').slice(1).join(' ') || '',
+            name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Doctor',
+            email: data.email || null,
+            phone: data.phone || data.phoneNumber || null,
+            specialties: Array.isArray(data.specialties) ? data.specialties : (data.specialty ? [data.specialty] : []),
+            licenseNo: data.licenseNo || data.license || null,
+            verifiedStatus: data.verifiedStatus || data.verified ? 'VERIFIED' : 'PENDING',
+            ...data
+          };
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error fetching doctor profile from Firestore:', error);
+      // Don't throw - return null if not found
+      return null;
+    }
+  }
+
+  /**
    * Check if Firestore is available
    * @returns {boolean} True if Firestore is initialized
    */

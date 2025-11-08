@@ -18,7 +18,7 @@ object ApiClient {
     }
     
     private val okHttpClient = OkHttpClient.Builder()
-        // .addInterceptor(TokenInterceptor()) // Removed for public access
+        .addInterceptor(TokenInterceptor()) // Enable Firebase token authentication
         .addInterceptor(loggingInterceptor)
         // Increased timeouts for slow Render backend (free tier can be slow to wake up)
         .connectTimeout(60, TimeUnit.SECONDS)

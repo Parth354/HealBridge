@@ -181,17 +181,19 @@ class ScheduleService {
 
   // Get doctor's schedule for a date range
   async getDoctorSchedule(doctorId, startDate, endDate) {
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+    // Parse date strings (YYYY-MM-DD) and set to UTC to avoid timezone issues
+    // When date is "2024-01-15", we want to query from 2024-01-15 00:00:00 UTC to 2024-01-15 23:59:59 UTC
+    // But we need to be careful - if date comes as "2024-01-15", create as UTC date
+    const start = new Date(startDate + 'T00:00:00.000Z');
+    const end = new Date(endDate + 'T23:59:59.999Z');
 
     const scheduleBlocks = await prisma.scheduleBlock.findMany({
       where: {
         doctor_id: doctorId,
-        startTs: { gte: start },
-        endTs: { lte: end }
+        startTs: { 
+          gte: start,
+          lte: end
+        }
       },
       include: {
         clinic: true
@@ -202,7 +204,10 @@ class ScheduleService {
     const appointments = await prisma.appointment.findMany({
       where: {
         doctor_id: doctorId,
-        startTs: { gte: start, lte: end }
+        startTs: { 
+          gte: start, 
+          lte: end 
+        }
       },
       include: {
         patient: { include: { user: true } },
@@ -284,11 +289,10 @@ class ScheduleService {
 
   // Get available time slots for a specific date
   async getAvailableSlots(doctorId, clinicId, date) {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    // Parse date as UTC to avoid timezone issues
+    // Date comes as "2024-01-15" (YYYY-MM-DD format)
+    const startOfDay = new Date(date + 'T00:00:00.000Z');
+    const endOfDay = new Date(date + 'T23:59:59.999Z');
 
     // Get work schedule blocks
     const workBlocks = await prisma.scheduleBlock.findMany({

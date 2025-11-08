@@ -111,7 +111,9 @@ class DoctorSelectionFragment : Fragment() {
         }
         
         viewModel.selectedDoctor.observe(viewLifecycleOwner) { doctor ->
-            doctorsAdapter.setSelectedDoctor(doctor?.id)
+            // Safely handle null doctor or null doctor.id
+            val doctorId = doctor?.id
+            doctorsAdapter.setSelectedDoctor(doctorId)
         }
         
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->

@@ -65,7 +65,7 @@ class SyncService {
   /**
    * Get or create user from Firebase authentication
    * Creates PostgreSQL user if doesn't exist
-   * Automatically syncs Firebase profile to Prisma Patient if available
+   * Automatically syncs Firebase profile to Prisma Patient/Doctor if available
    * 
    * @param {Object} firebaseUser - Firebase user object
    * @param {string} role - User role (PATIENT, DOCTOR, STAFF)
@@ -86,7 +86,21 @@ class SyncService {
           // Refresh user data
           user = await this.getUserByFirebaseUid(uid);
         }
+        // Sync Firebase profile to Prisma if user is a doctor
+        if (role === 'DOCTOR' && !user.doctor) {
+          await this.syncFirebaseToPrismaDoctor(uid);
+          // Refresh user data
+          user = await this.getUserByFirebaseUid(uid);
+        }
         return user;
+      }
+
+      // Check Firestore to determine role if not specified
+      if (!role || role === 'PATIENT') {
+        const doctorProfile = await firestoreService.getDoctorProfile(uid);
+        if (doctorProfile) {
+          role = 'DOCTOR';
+        }
       }
 
       // Create new user
@@ -103,11 +117,18 @@ class SyncService {
         }
       });
 
-      console.log(`✅ Created new user: ${user.id} for Firebase UID: ${uid}`);
+      console.log(`✅ Created new user: ${user.id} for Firebase UID: ${uid} with role: ${role}`);
 
       // For patients, try to sync Firebase profile to Prisma Patient
       if (role === 'PATIENT') {
         await this.syncFirebaseToPrismaPatient(uid);
+        // Refresh user data
+        user = await this.getUserByFirebaseUid(uid);
+      }
+
+      // For doctors, try to sync Firebase profile to Prisma Doctor
+      if (role === 'DOCTOR') {
+        await this.syncFirebaseToPrismaDoctor(uid);
         // Refresh user data
         user = await this.getUserByFirebaseUid(uid);
       }
@@ -199,6 +220,89 @@ class SyncService {
       console.error('Error syncing Firebase to Prisma Patient:', error);
       // Don't throw - allow the app to continue even if sync fails
       // The patient can be created/updated later when they book an appointment
+      return null;
+    }
+  }
+
+  /**
+   * Sync Firebase doctor profile to Prisma Doctor table
+   * Creates or updates Doctor record in PostgreSQL from Firestore data
+   * 
+   * @param {string} firebaseUid - Firebase user UID
+   * @returns {Promise<Object>} Synced Doctor record
+   */
+  async syncFirebaseToPrismaDoctor(firebaseUid) {
+    try {
+      console.log(`🔄 Syncing Firebase doctor profile to Prisma Doctor for: ${firebaseUid}`);
+      
+      // Get PostgreSQL user
+      const user = await this.getUserByFirebaseUid(firebaseUid);
+      if (!user) {
+        throw new Error(`User not found for Firebase UID: ${firebaseUid}`);
+      }
+      
+      // Get Firestore doctor profile
+      const firestoreProfile = await firestoreService.getDoctorProfile(firebaseUid);
+      if (!firestoreProfile) {
+        console.log(`⚠️  No Firestore doctor profile found, skipping Prisma sync`);
+        return null;
+      }
+      
+      // Prepare doctor data for Prisma
+      const doctorData = {
+        user_id: user.id,
+        firstName: firestoreProfile.firstName || '',
+        lastName: firestoreProfile.lastName || '',
+        specialties: firestoreProfile.specialties || [],
+        licenseNo: firestoreProfile.licenseNo || '',
+        verifiedStatus: firestoreProfile.verifiedStatus || 'PENDING'
+      };
+      
+      // Check if doctor already exists
+      if (user.doctor) {
+        // Update existing doctor
+        const updatedDoctor = await prisma.doctor.update({
+          where: { id: user.doctor.id },
+          data: {
+            firstName: doctorData.firstName || user.doctor.firstName,
+            lastName: doctorData.lastName || user.doctor.lastName,
+            specialties: doctorData.specialties.length > 0 ? doctorData.specialties : user.doctor.specialties,
+            licenseNo: doctorData.licenseNo || user.doctor.licenseNo,
+            verifiedStatus: doctorData.verifiedStatus || user.doctor.verifiedStatus
+          }
+        });
+        
+        console.log(`✅ Updated Prisma Doctor record: ${updatedDoctor.id}`);
+        
+        // Invalidate cache
+        await this.invalidateUserCache(firebaseUid);
+        
+        return updatedDoctor;
+      } else {
+        // Create new doctor - require at least licenseNo
+        if (!doctorData.licenseNo) {
+          console.log(`⚠️  No license number found, cannot create doctor profile`);
+          return null;
+        }
+        
+        const newDoctor = await prisma.doctor.create({
+          data: {
+            ...doctorData,
+            specialties: doctorData.specialties.length > 0 ? doctorData.specialties : ['General']
+          }
+        });
+        
+        console.log(`✅ Created Prisma Doctor record: ${newDoctor.id}`);
+        
+        // Invalidate cache
+        await this.invalidateUserCache(firebaseUid);
+        
+        return newDoctor;
+      }
+    } catch (error) {
+      console.error('Error syncing Firebase to Prisma Doctor:', error);
+      // Don't throw - allow the app to continue even if sync fails
+      // The doctor can create their profile later through the app
       return null;
     }
   }

@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 
 class AppointmentsFragment : Fragment() {
     private var _binding: FragmentAppointmentsBinding? = null
-    private val binding get() = _binding!!
+    private val binding get() = _binding ?: throw IllegalStateException("Binding is null. Fragment view may have been destroyed.")
     private lateinit var apiRepository: ApiRepository
     private val appointments = mutableListOf<com.example.healbridge.data.models.AppointmentDetail>()
 
@@ -66,56 +66,55 @@ class AppointmentsFragment : Fragment() {
     
     
     private fun loadAppointments() {
-        if (_binding != null) {
-            // Show loading indicator
-            binding.viewPager.visibility = View.GONE
-            binding.emptyState.visibility = View.GONE
-            
-            lifecycleScope.launch {
-                try {
-                    when (val result = apiRepository.getAppointments()) {
-                        is NetworkResult.Success -> {
-                            if (_binding != null) {
-                                appointments.clear()
-                                appointments.addAll(result.data.appointments)
-                                updateUI()
-                            }
-                        }
-                        is NetworkResult.Error -> {
-                            if (_binding != null && isAdded && context != null) {
-                                // Show user-friendly error message
-                                val errorMessage = when {
-                                    result.message.contains("timeout", ignoreCase = true) -> 
-                                        "Server is taking too long to respond. Please try again."
-                                    result.message.contains("connection", ignoreCase = true) -> 
-                                        "Cannot connect to server. Please check your internet connection."
-                                    else -> "Unable to load appointments. ${result.message}"
-                                }
-                                
-                                // Show error in empty state
-                                showEmptyStateWithError(errorMessage)
-                                
-                                // Also show toast for immediate feedback
-                                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                        is NetworkResult.Loading -> {
-                            // Loading state handled by visibility changes
+        val binding = _binding ?: return
+        // Show loading indicator
+        binding.viewPager.visibility = View.GONE
+        binding.emptyState.visibility = View.GONE
+        
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                when (val result = apiRepository.getAppointments()) {
+                    is NetworkResult.Success -> {
+                        _binding?.let {
+                            appointments.clear()
+                            appointments.addAll(result.data.appointments)
+                            updateUI()
                         }
                     }
-                } catch (e: Exception) {
-                    android.util.Log.e("AppointmentsFragment", "Error loading appointments", e)
-                    if (_binding != null && isAdded && context != null) {
-                        showEmptyStateWithError("An unexpected error occurred. Please try again.")
-                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    is NetworkResult.Error -> {
+                        if (isAdded && context != null) {
+                            // Show user-friendly error message
+                            val errorMessage = when {
+                                result.message.contains("timeout", ignoreCase = true) -> 
+                                    "Server is taking too long to respond. Please try again."
+                                result.message.contains("connection", ignoreCase = true) -> 
+                                    "Cannot connect to server. Please check your internet connection."
+                                else -> "Unable to load appointments. ${result.message}"
+                            }
+                            
+                            // Show error in empty state
+                            _binding?.let { showEmptyStateWithError(errorMessage) }
+                            
+                            // Also show toast for immediate feedback
+                            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+                        }
                     }
+                    is NetworkResult.Loading -> {
+                        // Loading state handled by visibility changes
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("AppointmentsFragment", "Error loading appointments", e)
+                if (isAdded && context != null) {
+                    _binding?.let { showEmptyStateWithError("An unexpected error occurred. Please try again.") }
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
     
     private fun showEmptyStateWithError(errorMessage: String) {
-        if (_binding != null) {
+        _binding?.let { binding ->
             binding.emptyState.visibility = View.VISIBLE
             binding.viewPager.visibility = View.GONE
             
@@ -133,9 +132,10 @@ class AppointmentsFragment : Fragment() {
     }
     
     private fun updateUI() {
-        if (_binding != null) {
-            val upcomingCount = appointments.count { 
-                it.status == "CONFIRMED" || it.status == "PENDING" 
+        _binding?.let { binding ->
+            // Count upcoming appointments based on date/time, not just status
+            val upcomingCount = appointments.count { appointmentDetail ->
+                !isAppointmentPast(appointmentDetail.startTs)
             }
             
             binding.tvAppointmentsCount.text = when {
@@ -154,7 +154,7 @@ class AppointmentsFragment : Fragment() {
     }
     
     private fun showEmptyState() {
-        if (_binding != null) {
+        _binding?.let { binding ->
             binding.emptyState.visibility = View.VISIBLE
             binding.viewPager.visibility = View.GONE
             
@@ -172,7 +172,7 @@ class AppointmentsFragment : Fragment() {
     }
     
     private fun hideEmptyState() {
-        if (_binding != null) {
+        _binding?.let { binding ->
             binding.emptyState.visibility = View.GONE
             binding.viewPager.visibility = View.VISIBLE
         }
@@ -278,6 +278,54 @@ private fun getDoctorName(appointmentDetail: com.example.healbridge.data.models.
     }
 }
 
+// Helper function to check if appointment is in the past based on date/time
+private fun isAppointmentPast(startTs: String): Boolean {
+    return try {
+        // Handle various ISO 8601 formats:
+        // "2024-01-15T10:30:00Z"
+        // "2024-01-15T10:30:00.000Z"
+        // "2024-01-15T10:30:00+00:00"
+        // "2024-01-15T10:30:00"
+        val normalizedTs = startTs.trim()
+        val appointmentDateTime = when {
+            // Standard ISO 8601 with Z
+            normalizedTs.endsWith("Z") -> java.time.Instant.parse(normalizedTs)
+            // ISO 8601 with timezone offset
+            normalizedTs.contains("+") || normalizedTs.matches(Regex(".*-\\d{2}:\\d{2}$")) -> 
+                java.time.Instant.parse(normalizedTs)
+            // Local datetime without timezone - assume UTC
+            normalizedTs.contains("T") -> {
+                val localDateTime = java.time.LocalDateTime.parse(normalizedTs.substring(0, 19))
+                localDateTime.atZone(java.time.ZoneId.systemDefault()).toInstant()
+            }
+            // Just date - assume start of day in system timezone
+            else -> {
+                val date = java.time.LocalDate.parse(normalizedTs.substring(0, 10))
+                date.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+            }
+        }
+        val currentDateTime = java.time.Instant.now()
+        appointmentDateTime.isBefore(currentDateTime)
+    } catch (e: Exception) {
+        android.util.Log.e("AppointmentsFragment", "Error parsing appointment date: $startTs", e)
+        // If parsing fails, try a simpler approach with date comparison
+        try {
+            // Fallback: Compare date strings (YYYY-MM-DD)
+            if (startTs.length >= 10) {
+                val appointmentDate = startTs.substring(0, 10)
+                val currentDate = java.time.LocalDate.now().toString()
+                appointmentDate < currentDate
+            } else {
+                false
+            }
+        } catch (e2: Exception) {
+            android.util.Log.e("AppointmentsFragment", "Error in fallback date comparison", e2)
+            // If all parsing fails, assume it's not in the past to be safe
+            false
+        }
+    }
+}
+
 // Upcoming Appointments Fragment
 class UpcomingAppointmentsFragment : Fragment() {
     private lateinit var apiRepository: ApiRepository
@@ -301,11 +349,12 @@ class UpcomingAppointmentsFragment : Fragment() {
     }
     
     private fun loadAppointments() {
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             when (val result = apiRepository.getAppointments()) {
                 is NetworkResult.Success -> {
-                    val upcoming = result.data.appointments.filter { 
-                        it.status == "CONFIRMED" || it.status == "PENDING" 
+                    // Filter appointments that are in the future (not in the past)
+                    val upcoming = result.data.appointments.filter { appointmentDetail ->
+                        !isAppointmentPast(appointmentDetail.startTs)
                     }
                     adapter.updateAppointments(upcoming.map { appointmentDetail ->
                         // Get doctor name - try multiple sources with proper null/empty handling
@@ -329,6 +378,7 @@ class UpcomingAppointmentsFragment : Fragment() {
                 }
                 else -> {
                     // Handle error
+                    android.util.Log.e("UpcomingAppointmentsFragment", "Failed to load appointments")
                 }
             }
         }
@@ -358,11 +408,12 @@ class PastAppointmentsFragment : Fragment() {
     }
     
     private fun loadAppointments() {
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             when (val result = apiRepository.getAppointments()) {
                 is NetworkResult.Success -> {
-                    val past = result.data.appointments.filter { 
-                        it.status == "COMPLETED" || it.status == "CANCELLED" 
+                    // Filter appointments that are in the past based on date/time
+                    val past = result.data.appointments.filter { appointmentDetail ->
+                        isAppointmentPast(appointmentDetail.startTs)
                     }
                     adapter.updateAppointments(past.map { appointmentDetail ->
                         // Get doctor name - try multiple sources with proper null/empty handling
@@ -386,6 +437,7 @@ class PastAppointmentsFragment : Fragment() {
                 }
                 else -> {
                     // Handle error
+                    android.util.Log.e("PastAppointmentsFragment", "Failed to load appointments")
                 }
             }
         }

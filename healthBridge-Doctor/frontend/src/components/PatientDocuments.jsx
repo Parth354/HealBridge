@@ -22,7 +22,7 @@ const PatientDocuments = ({ patientId }) => {
   const { data: documents, isLoading } = useQuery({
     queryKey: ['patient-documents', patientId],
     queryFn: async () => {
-      const response = await api.get(`/api/doctor/patients/${patientId}/documents`);
+      const response = await api.get(`/doctor/patients/${patientId}/documents`);
       return response.data.documents || [];
     }
   });

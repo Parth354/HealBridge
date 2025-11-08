@@ -21,7 +21,7 @@ const PatientTimeline = ({ patientId }) => {
   const { data: appointments, isLoading } = useQuery({
     queryKey: ['patient-appointments', patientId],
     queryFn: async () => {
-      const response = await api.get(`/api/doctor/patients/${patientId}/appointments`);
+      const response = await api.get(`/doctor/patients/${patientId}/appointments`);
       return response.data.appointments || [];
     }
   });

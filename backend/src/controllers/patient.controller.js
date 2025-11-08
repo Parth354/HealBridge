@@ -7,35 +7,58 @@ import prescriptionService from '../services/prescription.service.js';
 import medicationService from '../services/medication.service.js';
 import waitTimeService from '../services/waittime.service.js';
 import firestoreService from '../services/firestore.service.js';
-import syncService from '../services/sync.service.js'; // New import
+import syncService from '../services/sync.service.js';
+import prisma from '../config/prisma.js';
 
 class PatientController {
-  // Get patient profile - public access version
+  // Get patient profile from Firebase Firestore
   async getProfile(req, res) {
     try {
-      // For public access, return mock profile
-      const mockProfile = {
-        profile: {
-          firstName: 'Public',
-          lastName: 'User',
-          email: 'public@healbridge.com',
-          phone: '+1234567890',
-          dateOfBirth: '1990-01-01',
-          gender: 'Other',
-          address: 'Public Address',
-          emergencyContact: {
-            name: 'Emergency Contact',
-            phone: '+1234567890'
-          }
-        },
-        hasFirestoreProfile: true
-      };
+      const firebaseUid = req.user?.firebaseUid || req.user?.firebase_uid;
 
-      res.json({ 
-        success: true, 
-        profile: mockProfile,
-        synced: true,
-        publicAccess: true
+      if (!firebaseUid) {
+        return res.status(401).json({ 
+          error: 'Firebase UID not found',
+          message: 'Please authenticate with Firebase to access your profile'
+        });
+      }
+
+      // Get patient profile from Firestore
+      const firestoreProfile = await firestoreService.getPatientProfile(firebaseUid);
+
+      if (!firestoreProfile) {
+        // No profile in Firestore - return empty profile structure
+        return res.json({
+          success: true,
+          profile: {
+            firstName: '',
+            lastName: '',
+            email: req.user?.email || '',
+            phoneNumber: '',
+            dob: null,
+            gender: null,
+            address: null,
+            allergies: [],
+            conditions: [],
+            emergencyContactName: null,
+            emergencyContactPhone: null
+          },
+          hasFirestoreProfile: false,
+          message: 'Profile not found in Firestore. Please complete your profile.'
+        });
+      }
+
+      // Sync Firebase profile to Prisma Patient table (if not already synced)
+      await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+
+      // Get unified profile (combines Firestore + Prisma data)
+      const unifiedProfile = await syncService.syncPatientProfile(firebaseUid);
+
+      res.json({
+        success: true,
+        profile: unifiedProfile.profile || firestoreProfile,
+        hasFirestoreProfile: true,
+        synced: unifiedProfile.synced || false
       });
     } catch (error) {
       console.error('Get patient profile error:', error);
@@ -258,7 +281,31 @@ class PatientController {
   // Create slot hold
   async createSlotHold(req, res) {
     try {
-      const patientId = req.user.patientId;
+      let patientId = req.user.patientId;
+      const firebaseUid = req.user.firebaseUid;
+      
+      // If patientId is missing, try to sync from Firestore
+      if (!patientId && firebaseUid) {
+        try {
+          await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+          // Refresh user to get patientId
+          const user = await prisma.user.findUnique({
+            where: { firebase_uid: firebaseUid },
+            include: { patient: true }
+          });
+          patientId = user?.patient?.id;
+        } catch (error) {
+          console.error('Error syncing patient profile:', error);
+        }
+      }
+      
+      if (!patientId) {
+        return res.status(403).json({ 
+          error: 'Patient profile required',
+          message: 'Please complete your profile before booking an appointment'
+        });
+      }
+      
       const { doctorId, clinicId, startTs, endTs } = req.body;
 
       if (!doctorId || !clinicId || !startTs || !endTs) {
@@ -283,7 +330,31 @@ class PatientController {
   // Confirm appointment
   async confirmAppointment(req, res) {
     try {
-      const patientId = req.user.patientId;
+      let patientId = req.user.patientId;
+      const firebaseUid = req.user.firebaseUid;
+      
+      // If patientId is missing, try to sync from Firestore
+      if (!patientId && firebaseUid) {
+        try {
+          await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+          // Refresh user to get patientId
+          const user = await prisma.user.findUnique({
+            where: { firebase_uid: firebaseUid },
+            include: { patient: true }
+          });
+          patientId = user?.patient?.id;
+        } catch (error) {
+          console.error('Error syncing patient profile:', error);
+        }
+      }
+      
+      if (!patientId) {
+        return res.status(403).json({ 
+          error: 'Patient profile required',
+          message: 'Please complete your profile before confirming appointment'
+        });
+      }
+      
       const { holdId, visitType, address, feeMock } = req.body;
 
       if (!holdId) {
@@ -305,11 +376,36 @@ class PatientController {
     }
   }
 
-  // Get patient appointments - public access version
+  // Get patient appointments
   async getAppointments(req, res) {
     try {
-      const patientId = req.user.patientId;
+      let patientId = req.user.patientId;
+      const firebaseUid = req.user.firebaseUid;
       const { status } = req.query;
+
+      // If patientId is missing, try to sync from Firestore
+      if (!patientId && firebaseUid) {
+        try {
+          await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+          // Refresh user to get patientId
+          const user = await prisma.user.findUnique({
+            where: { firebase_uid: firebaseUid },
+            include: { patient: true }
+          });
+          patientId = user?.patient?.id;
+        } catch (error) {
+          console.error('Error syncing patient profile:', error);
+        }
+      }
+
+      if (!patientId) {
+        // Return empty appointments if no profile exists
+        return res.json({ 
+          appointments: [], 
+          count: 0,
+          message: 'No patient profile found. Please complete your profile.'
+        });
+      }
 
       try {
         const appointments = await bookingService.getPatientAppointments(
@@ -318,12 +414,11 @@ class PatientController {
         );
         res.json({ appointments, count: appointments.length });
       } catch (bookingError) {
-        // Return empty appointments for public access
-        console.log('No appointments found for public user, returning empty list');
+        // Return empty appointments on error
+        console.log('Error getting appointments:', bookingError.message);
         res.json({ 
           appointments: [], 
           count: 0,
-          publicAccess: true,
           message: 'No appointments found'
         });
       }
@@ -336,8 +431,30 @@ class PatientController {
   // Check-in for appointment
   async checkIn(req, res) {
     try {
-      const patientId = req.user.patientId;
+      let patientId = req.user.patientId;
+      const firebaseUid = req.user.firebaseUid;
       const { appointmentId } = req.params;
+
+      // If patientId is missing, try to sync from Firestore
+      if (!patientId && firebaseUid) {
+        try {
+          await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+          const user = await prisma.user.findUnique({
+            where: { firebase_uid: firebaseUid },
+            include: { patient: true }
+          });
+          patientId = user?.patient?.id;
+        } catch (error) {
+          console.error('Error syncing patient profile:', error);
+        }
+      }
+
+      if (!patientId) {
+        return res.status(403).json({ 
+          error: 'Patient profile required',
+          message: 'Please complete your profile'
+        });
+      }
 
       const appointment = await bookingService.checkIn(appointmentId, patientId);
       res.json({ success: true, appointment });
@@ -363,12 +480,34 @@ class PatientController {
   // Upload document (prescription, lab report)
   async uploadDocument(req, res) {
     try {
-      const patientId = req.user.patientId;
+      let patientId = req.user.patientId;
+      const firebaseUid = req.user.firebaseUid;
       const file = req.file;
       const { docType } = req.body;
 
       if (!file) {
         return res.status(400).json({ error: 'File is required' });
+      }
+
+      // If patientId is missing, try to sync from Firestore
+      if (!patientId && firebaseUid) {
+        try {
+          await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+          const user = await prisma.user.findUnique({
+            where: { firebase_uid: firebaseUid },
+            include: { patient: true }
+          });
+          patientId = user?.patient?.id;
+        } catch (error) {
+          console.error('Error syncing patient profile:', error);
+        }
+      }
+
+      if (!patientId) {
+        return res.status(403).json({ 
+          error: 'Patient profile required',
+          message: 'Please complete your profile before uploading documents'
+        });
       }
 
       const result = await ocrService.processDocument(
@@ -387,7 +526,29 @@ class PatientController {
   // Get patient summary
   async getPatientSummary(req, res) {
     try {
-      const patientId = req.user.patientId;
+      let patientId = req.user.patientId;
+      const firebaseUid = req.user.firebaseUid;
+
+      // If patientId is missing, try to sync from Firestore
+      if (!patientId && firebaseUid) {
+        try {
+          await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+          const user = await prisma.user.findUnique({
+            where: { firebase_uid: firebaseUid },
+            include: { patient: true }
+          });
+          patientId = user?.patient?.id;
+        } catch (error) {
+          console.error('Error syncing patient profile:', error);
+        }
+      }
+
+      if (!patientId) {
+        return res.status(403).json({ 
+          error: 'Patient profile required',
+          message: 'Please complete your profile'
+        });
+      }
 
       const summary = await ragService.generatePatientSummary(patientId);
       res.json(summary);
@@ -400,7 +561,26 @@ class PatientController {
   // Get prescriptions
   async getPrescriptions(req, res) {
     try {
-      const patientId = req.user.patientId;
+      let patientId = req.user.patientId;
+      const firebaseUid = req.user.firebaseUid;
+
+      // If patientId is missing, try to sync from Firestore
+      if (!patientId && firebaseUid) {
+        try {
+          await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+          const user = await prisma.user.findUnique({
+            where: { firebase_uid: firebaseUid },
+            include: { patient: true }
+          });
+          patientId = user?.patient?.id;
+        } catch (error) {
+          console.error('Error syncing patient profile:', error);
+        }
+      }
+
+      if (!patientId) {
+        return res.json({ prescriptions: [], count: 0, message: 'No patient profile found' });
+      }
 
       const prescriptions = await prescriptionService.getPatientPrescriptions(patientId);
       res.json({ prescriptions, count: prescriptions.length });
@@ -413,7 +593,26 @@ class PatientController {
   // Get medication reminders
   async getMedicationReminders(req, res) {
     try {
-      const patientId = req.user.patientId;
+      let patientId = req.user.patientId;
+      const firebaseUid = req.user.firebaseUid;
+
+      // If patientId is missing, try to sync from Firestore
+      if (!patientId && firebaseUid) {
+        try {
+          await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+          const user = await prisma.user.findUnique({
+            where: { firebase_uid: firebaseUid },
+            include: { patient: true }
+          });
+          patientId = user?.patient?.id;
+        } catch (error) {
+          console.error('Error syncing patient profile:', error);
+        }
+      }
+
+      if (!patientId) {
+        return res.json({ reminders: [], count: 0, message: 'No patient profile found' });
+      }
 
       const reminders = await medicationService.getTodayReminders(patientId);
       res.json({ reminders, count: reminders.length });
@@ -476,7 +675,26 @@ class PatientController {
   // Get refill reminders
   async getRefillReminders(req, res) {
     try {
-      const patientId = req.user.patientId;
+      let patientId = req.user.patientId;
+      const firebaseUid = req.user.firebaseUid;
+
+      // If patientId is missing, try to sync from Firestore
+      if (!patientId && firebaseUid) {
+        try {
+          await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+          const user = await prisma.user.findUnique({
+            where: { firebase_uid: firebaseUid },
+            include: { patient: true }
+          });
+          patientId = user?.patient?.id;
+        } catch (error) {
+          console.error('Error syncing patient profile:', error);
+        }
+      }
+
+      if (!patientId) {
+        return res.json({ reminders: [], count: 0, message: 'No patient profile found' });
+      }
 
       const reminders = await medicationService.getRefillReminders(patientId);
       res.json({ reminders, count: reminders.length });

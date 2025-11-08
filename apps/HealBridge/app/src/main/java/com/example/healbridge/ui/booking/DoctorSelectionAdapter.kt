@@ -29,6 +29,7 @@ class DoctorSelectionAdapter(
     }
     
     fun setSelectedDoctor(doctorId: String?) {
+        // Explicitly handle null case
         selectedDoctorId = doctorId
         notifyDataSetChanged()
     }
