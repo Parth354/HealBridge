@@ -30,20 +30,32 @@ class FirestoreService {
   async getPatientProfile(firebaseUid) {
     try {
       if (!this.db) {
+        console.error('❌ Firestore not initialized');
         throw new Error('Firestore not initialized');
       }
 
+      console.log(`📖 Fetching patient profile from Firestore for: ${firebaseUid}`);
       const docRef = this.db.collection('users').doc(firebaseUid);
       const doc = await docRef.get();
 
       if (!doc.exists) {
+        console.log(`⚠️  Document does not exist in Firestore for: ${firebaseUid}`);
         return null;
       }
 
       const data = doc.data();
+      console.log(`✅ Found Firestore document for ${firebaseUid}:`, {
+        hasFirstName: !!data.firstName,
+        hasLastName: !!data.lastName,
+        hasEmail: !!data.email,
+        hasDob: !!data.dob,
+        hasGender: !!data.gender,
+        firstName: data.firstName,
+        lastName: data.lastName
+      });
       
       // Transform Firestore data to our backend format
-      return {
+      const profile = {
         firebase_uid: firebaseUid,
         firstName: data.firstName || '',
         lastName: data.lastName || '',
@@ -52,12 +64,12 @@ class FirestoreService {
         phoneNumber: data.phoneNumber || null,
         dob: data.dob || null,
         gender: data.gender || null,
-        allergies: Array.isArray(data.allergies) ? data.allergies : [],
-        conditions: Array.isArray(data.conditions) ? data.conditions : [],
-        chronicConditions: Array.isArray(data.conditions) ? data.conditions.join(', ') : '',
+        allergies: Array.isArray(data.allergies) ? data.allergies : (data.allergies ? [data.allergies] : []),
+        conditions: Array.isArray(data.conditions) ? data.conditions : (data.conditions ? [data.conditions] : []),
+        chronicConditions: Array.isArray(data.conditions) ? data.conditions.join(', ') : (data.conditions || ''),
         emergencyContactName: data.emergencyContactName || null,
         emergencyContactPhone: data.emergencyContactPhone || null,
-        emergencyContact: data.emergencyContactPhone || null,
+        emergencyContact: data.emergencyContactPhone || data.emergencyContact || null,
         address: data.address || null,
         language: data.language || 'en',
         consentDataUse: data.consentDataUse || false,
@@ -66,8 +78,23 @@ class FirestoreService {
         updatedAt: data.updatedAt || Date.now(),
         createdAt: data.createdAt || Date.now()
       };
+      
+      console.log(`✅ Transformed Firestore profile:`, {
+        name: profile.name,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        dob: profile.dob,
+        gender: profile.gender
+      });
+      
+      return profile;
     } catch (error) {
-      console.error('Error fetching patient profile from Firestore:', error);
+      console.error('❌ Error fetching patient profile from Firestore:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
       throw new Error(`Failed to fetch patient profile: ${error.message}`);
     }
   }

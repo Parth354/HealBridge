@@ -158,32 +158,98 @@ class SyncService {
       // Get PostgreSQL user
       const user = await this.getUserByFirebaseUid(firebaseUid);
       if (!user) {
+        console.error(`❌ User not found for Firebase UID: ${firebaseUid}`);
         throw new Error(`User not found for Firebase UID: ${firebaseUid}`);
       }
+      
+      console.log(`✅ Found user in Prisma: ${user.id}, role: ${user.role}`);
       
       // Get Firestore profile
       const firestoreProfile = await firestoreService.getPatientProfile(firebaseUid);
       if (!firestoreProfile) {
-        console.log(`⚠️  No Firestore profile found, skipping Prisma sync`);
+        console.log(`⚠️  No Firestore profile found for ${firebaseUid}, skipping Prisma sync`);
         return null;
+      }
+      
+      console.log(`✅ Found Firestore profile for ${firebaseUid}:`, {
+        firstName: firestoreProfile.firstName,
+        lastName: firestoreProfile.lastName,
+        dob: firestoreProfile.dob,
+        gender: firestoreProfile.gender
+      });
+      
+      // Parse DOB - handle various formats
+      let dobDate;
+      if (firestoreProfile.dob) {
+        if (typeof firestoreProfile.dob === 'string') {
+          // Try parsing as ISO date string
+          dobDate = new Date(firestoreProfile.dob);
+          if (isNaN(dobDate.getTime())) {
+            // Try parsing as timestamp (milliseconds)
+            const timestamp = parseInt(firestoreProfile.dob);
+            if (!isNaN(timestamp)) {
+              dobDate = new Date(timestamp);
+            } else {
+              console.warn(`⚠️  Invalid DOB format: ${firestoreProfile.dob}, using default`);
+              dobDate = new Date('1990-01-01');
+            }
+          }
+        } else if (firestoreProfile.dob instanceof Date) {
+          dobDate = firestoreProfile.dob;
+        } else {
+          dobDate = new Date('1990-01-01');
+        }
+      } else {
+        dobDate = new Date('1990-01-01');
+      }
+      
+      // Validate gender - must be one of the allowed values
+      const validGenders = ['Male', 'Female', 'Other'];
+      let gender = firestoreProfile.gender || 'Other';
+      if (!validGenders.includes(gender)) {
+        console.warn(`⚠️  Invalid gender: ${gender}, defaulting to 'Other'`);
+        gender = 'Other';
+      }
+      
+      // Prepare name - ensure it's not empty (required field)
+      let patientName = firestoreProfile.name || 
+                       `${firestoreProfile.firstName || ''} ${firestoreProfile.lastName || ''}`.trim();
+      
+      // If name is still empty or just whitespace, use fallback
+      if (!patientName || patientName.trim().length === 0) {
+        // Try to get name from email
+        if (firestoreProfile.email) {
+          patientName = firestoreProfile.email.split('@')[0];
+        } else {
+          patientName = 'Patient';
+        }
+        console.warn(`⚠️  Name was empty, using fallback: ${patientName}`);
       }
       
       // Prepare patient data for Prisma
       const patientData = {
         user_id: user.id,
-        name: firestoreProfile.name || `${firestoreProfile.firstName || ''} ${firestoreProfile.lastName || ''}`.trim() || 'Patient',
-        dob: firestoreProfile.dob ? new Date(firestoreProfile.dob) : new Date('1990-01-01'), // Default DOB if not provided
-        gender: firestoreProfile.gender || 'Other',
+        name: patientName.trim(),
+        dob: dobDate,
+        gender: gender,
         allergies: Array.isArray(firestoreProfile.allergies) 
           ? firestoreProfile.allergies.join(', ') 
           : (firestoreProfile.allergies || ''),
-        chronicConditions: firestoreProfile.chronicConditions || '',
+        chronicConditions: firestoreProfile.chronicConditions || (Array.isArray(firestoreProfile.conditions) ? firestoreProfile.conditions.join(', ') : ''),
         emergencyContact: firestoreProfile.emergencyContactPhone || firestoreProfile.emergencyContact || '+1234567890',
         careCircle: [] // Can be populated later
       };
       
+      console.log(`📝 Prepared patient data:`, {
+        user_id: patientData.user_id,
+        name: patientData.name,
+        dob: patientData.dob,
+        gender: patientData.gender
+      });
+      
       // Check if patient already exists
       if (user.patient) {
+        console.log(`🔄 Updating existing Patient record: ${user.patient.id}`);
         // Update existing patient
         const updatedPatient = await prisma.patient.update({
           where: { id: user.patient.id },
@@ -204,23 +270,50 @@ class SyncService {
         
         return updatedPatient;
       } else {
+        console.log(`🆕 Creating new Patient record for user: ${user.id}`);
         // Create new patient
-        const newPatient = await prisma.patient.create({
-          data: patientData
-        });
-        
-        console.log(`✅ Created Prisma Patient record: ${newPatient.id}`);
-        
-        // Invalidate cache
-        await this.invalidateUserCache(firebaseUid);
-        
-        return newPatient;
+        try {
+          const newPatient = await prisma.patient.create({
+            data: patientData
+          });
+          
+          console.log(`✅ Created Prisma Patient record: ${newPatient.id} for user: ${user.id}`);
+          
+          // Invalidate cache
+          await this.invalidateUserCache(firebaseUid);
+          
+          return newPatient;
+        } catch (createError) {
+          console.error(`❌ Error creating Patient record:`, createError);
+          console.error(`❌ Patient data that failed:`, JSON.stringify(patientData, null, 2));
+          
+          // If it's a unique constraint error, try to find existing patient
+          if (createError.code === 'P2002') {
+            console.log(`⚠️  Patient might already exist, trying to find...`);
+            const existingPatient = await prisma.patient.findUnique({
+              where: { user_id: user.id }
+            });
+            if (existingPatient) {
+              console.log(`✅ Found existing Patient record: ${existingPatient.id}`);
+              return existingPatient;
+            }
+          }
+          
+          throw createError;
+        }
       }
     } catch (error) {
-      console.error('Error syncing Firebase to Prisma Patient:', error);
-      // Don't throw - allow the app to continue even if sync fails
-      // The patient can be created/updated later when they book an appointment
-      return null;
+      console.error('❌ Error syncing Firebase to Prisma Patient:', error);
+      console.error('❌ Error stack:', error.stack);
+      console.error('❌ Error details:', {
+        code: error.code,
+        meta: error.meta,
+        message: error.message
+      });
+      
+      // Re-throw the error so it can be handled by the caller
+      // This allows the caller to see what went wrong and handle it appropriately
+      throw error;
     }
   }
 

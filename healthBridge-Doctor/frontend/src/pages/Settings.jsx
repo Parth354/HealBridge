@@ -176,9 +176,19 @@ const Settings = () => {
           }, 2000);
           break;
         case 400:
-          errorMsg = error.response?.data?.error || 'Invalid data. Please check your inputs and try again.';
-          setErrorMessage(errorMsg);
-          showError(errorMsg);
+          // Enhanced error handling for validation errors
+          const errorData = error.response?.data;
+          if (errorData?.details && Array.isArray(errorData.details)) {
+            // Validation errors with field details
+            const fieldErrors = errorData.details.map(d => `${d.field}: ${d.message}`).join(', ');
+            errorMsg = `Validation failed: ${fieldErrors}`;
+            setErrorMessage(errorData.message || errorMsg);
+            showError(errorData.message || errorMsg);
+          } else {
+            errorMsg = errorData?.message || errorData?.error || 'Invalid data. Please check your inputs and try again.';
+            setErrorMessage(errorMsg);
+            showError(errorMsg);
+          }
           break;
         case 500:
           errorMsg = 'Server error. Please try again later or contact support.';

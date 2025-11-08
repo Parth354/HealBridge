@@ -282,27 +282,67 @@ class PatientController {
   async createSlotHold(req, res) {
     try {
       let patientId = req.user.patientId;
-      const firebaseUid = req.user.firebaseUid;
+      const firebaseUid = req.user.firebaseUid || req.user.firebase_uid;
+      
+      console.log(`📋 createSlotHold - User: ${req.user.userId}, patientId: ${patientId}, firebaseUid: ${firebaseUid}`);
       
       // If patientId is missing, try to sync from Firestore
       if (!patientId && firebaseUid) {
+        console.log(`🔄 PatientId missing, attempting to sync from Firestore for: ${firebaseUid}`);
         try {
-          await syncService.syncFirebaseToPrismaPatient(firebaseUid);
-          // Refresh user to get patientId
-          const user = await prisma.user.findUnique({
-            where: { firebase_uid: firebaseUid },
-            include: { patient: true }
-          });
-          patientId = user?.patient?.id;
+          const syncedPatient = await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+          
+          if (syncedPatient) {
+            console.log(`✅ Sync successful, Patient ID: ${syncedPatient.id}`);
+            patientId = syncedPatient.id;
+          } else {
+            console.log(`⚠️  Sync returned null, refreshing user data...`);
+            // Refresh user to get patientId (sync might have created it but cache wasn't updated)
+            const user = await prisma.user.findUnique({
+              where: { firebase_uid: firebaseUid },
+              include: { patient: true }
+            });
+            
+            if (user?.patient) {
+              console.log(`✅ Found patient after refresh: ${user.patient.id}`);
+              patientId = user.patient.id;
+              // Update req.user for future requests
+              req.user.patientId = patientId;
+            } else {
+              console.error(`❌ Patient not found after sync and refresh for: ${firebaseUid}`);
+            }
+          }
         } catch (error) {
-          console.error('Error syncing patient profile:', error);
+          console.error('❌ Error syncing patient profile:', error);
+          console.error('❌ Error details:', {
+            message: error.message,
+            code: error.code,
+            stack: error.stack
+          });
+          
+          // Try one more time to get user with patient
+          try {
+            const user = await prisma.user.findUnique({
+              where: { firebase_uid: firebaseUid },
+              include: { patient: true }
+            });
+            if (user?.patient) {
+              console.log(`✅ Found patient after error: ${user.patient.id}`);
+              patientId = user.patient.id;
+            }
+          } catch (refreshError) {
+            console.error('❌ Error refreshing user after sync failure:', refreshError);
+          }
         }
       }
       
       if (!patientId) {
+        console.error(`❌ No patientId found for user: ${req.user.userId}, firebaseUid: ${firebaseUid}`);
         return res.status(403).json({ 
           error: 'Patient profile required',
-          message: 'Please complete your profile before booking an appointment'
+          message: 'Please complete your profile before booking an appointment. Make sure your profile is saved in the app.',
+          code: 'PATIENT_PROFILE_REQUIRED',
+          hint: 'Please open the app, go to your profile, and save your information.'
         });
       }
       
@@ -311,6 +351,8 @@ class PatientController {
       if (!doctorId || !clinicId || !startTs || !endTs) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
+
+      console.log(`✅ Creating slot hold for patient: ${patientId}`);
 
       const hold = await bookingService.createSlotHold({
         doctorId,
@@ -322,7 +364,7 @@ class PatientController {
 
       res.json(hold);
     } catch (error) {
-      console.error('Create slot hold error:', error);
+      console.error('❌ Create slot hold error:', error);
       res.status(400).json({ error: error.message });
     }
   }

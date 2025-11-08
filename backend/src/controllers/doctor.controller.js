@@ -388,6 +388,14 @@ class DoctorController {
     try {
       const doctorId = req.user.doctorId;
 
+      if (!doctorId) {
+        return res.status(403).json({ 
+          error: 'Doctor profile required',
+          message: 'Please complete your doctor profile setup',
+          code: 'DOCTOR_PROFILE_REQUIRED'
+        });
+      }
+
       const doctor = await prisma.doctor.findUnique({
         where: { id: doctorId },
         include: {
@@ -403,7 +411,11 @@ class DoctorController {
       });
 
       if (!doctor) {
-        return res.status(404).json({ error: 'Doctor profile not found' });
+        return res.status(404).json({ 
+          error: 'Doctor profile not found',
+          message: 'Doctor profile not found. Please create your profile.',
+          code: 'DOCTOR_PROFILE_NOT_FOUND'
+        });
       }
 
       res.json({ success: true, doctor });
@@ -417,11 +429,55 @@ class DoctorController {
   async updateProfile(req, res) {
     try {
       const doctorId = req.user.doctorId;
+
+      if (!doctorId) {
+        return res.status(403).json({ 
+          error: 'Doctor profile required',
+          message: 'Please create your doctor profile first',
+          code: 'DOCTOR_PROFILE_REQUIRED'
+        });
+      }
+
       const { firstName, lastName, specialties, email } = req.body;
 
+      // Validate input
+      if (firstName !== undefined && (!firstName || firstName.trim().length < 1)) {
+        return res.status(400).json({ 
+          error: 'Validation failed',
+          message: 'First name must be at least 1 character',
+          details: [{ field: 'firstName', message: 'First name is required and must be at least 1 character' }]
+        });
+      }
+
+      if (lastName !== undefined && (!lastName || lastName.trim().length < 1)) {
+        return res.status(400).json({ 
+          error: 'Validation failed',
+          message: 'Last name must be at least 1 character',
+          details: [{ field: 'lastName', message: 'Last name is required and must be at least 1 character' }]
+        });
+      }
+
+      if (specialties !== undefined) {
+        if (!Array.isArray(specialties) || specialties.length === 0) {
+          return res.status(400).json({ 
+            error: 'Validation failed',
+            message: 'Specialties must be a non-empty array',
+            details: [{ field: 'specialties', message: 'At least one specialty is required' }]
+          });
+        }
+      }
+
+      if (email !== undefined && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ 
+          error: 'Validation failed',
+          message: 'Invalid email format',
+          details: [{ field: 'email', message: 'Email must be a valid email address' }]
+        });
+      }
+
       const updateData = {};
-      if (firstName !== undefined) updateData.firstName = firstName;
-      if (lastName !== undefined) updateData.lastName = lastName;
+      if (firstName !== undefined) updateData.firstName = firstName.trim();
+      if (lastName !== undefined) updateData.lastName = lastName.trim();
       if (specialties !== undefined) updateData.specialties = specialties;
 
       const doctor = await prisma.doctor.update({
@@ -436,14 +492,41 @@ class DoctorController {
       if (email && email !== doctor.user.email) {
         await prisma.user.update({
           where: { id: doctor.user_id },
-          data: { email }
+          data: { email: email.trim() }
         });
       }
 
-      res.json({ success: true, doctor });
+      // Refresh doctor data to include updated email
+      const updatedDoctor = await prisma.doctor.findUnique({
+        where: { id: doctorId },
+        include: {
+          user: {
+            select: {
+              phone: true,
+              email: true,
+              verified: true
+            }
+          },
+          clinics: true
+        }
+      });
+
+      res.json({ success: true, doctor: updatedDoctor });
     } catch (error) {
       console.error('Update profile error:', error);
-      res.status(400).json({ error: error.message });
+      
+      // Handle Prisma errors
+      if (error.code === 'P2025') {
+        return res.status(404).json({ 
+          error: 'Doctor profile not found',
+          message: 'Doctor profile not found. Please create your profile first.'
+        });
+      }
+      
+      res.status(400).json({ 
+        error: error.message || 'Failed to update profile',
+        message: error.message || 'Failed to update profile'
+      });
     }
   }
 

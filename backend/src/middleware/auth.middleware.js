@@ -214,27 +214,54 @@ const requirePatientProfile = async (req, res, next) => {
     // If patientId is missing, try to sync from Firestore
     if (!req.user.patientId) {
       try {
+        console.log(`🔄 requirePatientProfile: Syncing profile for Firebase UID: ${req.user.firebaseUid}`);
         const syncService = (await import('../services/sync.service.js')).default;
         
         // Sync Firebase profile to Prisma Patient
-        await syncService.syncFirebaseToPrismaPatient(req.user.firebaseUid);
+        const syncedPatient = await syncService.syncFirebaseToPrismaPatient(req.user.firebaseUid);
         
-        // Refresh user data to get updated patientId
-        const updatedUser = await prisma.user.findUnique({
-          where: { id: req.user.userId },
-          include: { patient: true }
-        });
-        
-        if (updatedUser?.patient) {
-          req.user.patientId = updatedUser.patient.id;
-          console.log(`✅ Auto-synced patient profile for user: ${req.user.userId}`);
+        if (syncedPatient) {
+          req.user.patientId = syncedPatient.id;
+          console.log(`✅ Auto-synced patient profile for user: ${req.user.userId}, patientId: ${syncedPatient.id}`);
         } else {
-          // Profile doesn't exist in Firestore - allow to proceed but booking will need profile
-          console.log(`⚠️  Patient profile not found in Firestore for: ${req.user.firebaseUid}`);
-          // Don't block - let the controller handle missing profile
+          // Sync returned null - try refreshing user data
+          console.log(`⚠️  Sync returned null, refreshing user data...`);
+          const updatedUser = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            include: { patient: true }
+          });
+          
+          if (updatedUser?.patient) {
+            req.user.patientId = updatedUser.patient.id;
+            console.log(`✅ Found patient after refresh: ${updatedUser.patient.id}`);
+          } else {
+            // Profile doesn't exist in Firestore - allow to proceed but booking will need profile
+            console.log(`⚠️  Patient profile not found in Firestore for: ${req.user.firebaseUid}`);
+            // Don't block - let the controller handle missing profile
+          }
         }
       } catch (error) {
-        console.error('Error auto-syncing patient profile:', error);
+        console.error('❌ Error auto-syncing patient profile:', error);
+        console.error('❌ Error details:', {
+          message: error.message,
+          code: error.code,
+          stack: error.stack
+        });
+        
+        // Try to get patientId from database even if sync failed
+        try {
+          const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            include: { patient: true }
+          });
+          if (user?.patient) {
+            req.user.patientId = user.patient.id;
+            console.log(`✅ Found existing patient after sync error: ${user.patient.id}`);
+          }
+        } catch (refreshError) {
+          console.error('❌ Error refreshing user after sync failure:', refreshError);
+        }
+        
         // Don't block - allow to proceed, controller will handle error
       }
     }
@@ -273,9 +300,12 @@ const requireDoctorProfile = async (req, res, next) => {
       }
     }
     
+    // Return detailed error response
     return res.status(403).json({ 
       error: 'Doctor profile required',
-      message: 'Please complete your doctor profile setup'
+      message: 'Please complete your doctor profile setup',
+      code: 'DOCTOR_PROFILE_REQUIRED',
+      hint: 'Visit /profile-setup to create your doctor profile'
     });
   }
   next();

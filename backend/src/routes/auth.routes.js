@@ -17,6 +17,7 @@ router.use(authenticate);
 
 router.get('/me', authController.getCurrentUser);
 router.post('/patient/profile', authController.createPatientProfile); // DEPRECATED - Returns 410
+// Create doctor profile - requires validation
 router.post('/doctor/profile', validate(schemas.createDoctorProfile), authController.createDoctorProfile);
 router.put('/language', authController.updateLanguage);
 
