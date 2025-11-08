@@ -103,6 +103,16 @@ class BookingViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     
+    fun setCurrentStep(step: Int) {
+        if (step in 0..3) {
+            _currentStep.value = step
+            // If jumping to step 2 and doctor is selected, load time slots
+            if (step == 2 && _selectedDoctor.value != null) {
+                _selectedDoctor.value?.let { loadTimeSlots(it.id) }
+            }
+        }
+    }
+    
     fun analyzeSymptoms() {
         viewModelScope.launch {
             _isLoading.value = true

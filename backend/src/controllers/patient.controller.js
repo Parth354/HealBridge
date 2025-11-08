@@ -43,7 +43,7 @@ class PatientController {
     }
   }
 
-  // Update patient profile in Firestore and invalidate cache
+  // Update patient profile in Firestore and sync to Prisma
   async updateProfile(req, res) {
     try {
       const firebaseUid = req.user.firebaseUid;
@@ -72,13 +72,16 @@ class PatientController {
       // Invalidate cache to force fresh sync
       await syncService.invalidateUserCache(firebaseUid);
 
-      // Sync the updated profile
+      // Sync Firebase profile to Prisma Patient table
+      await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+
+      // Sync the updated profile (for cache)
       const syncedProfile = await syncService.syncPatientProfile(firebaseUid);
 
       res.json({ 
         success: true, 
         profile: syncedProfile,
-        message: 'Profile updated successfully'
+        message: 'Profile updated and synced successfully'
       });
     } catch (error) {
       console.error('Update patient profile error:', error);
@@ -129,12 +132,15 @@ class PatientController {
       // Invalidate cache
       await syncService.invalidateUserCache(firebaseUid);
 
-      // Sync profile
+      // Sync Firebase profile to Prisma Patient table
+      await syncService.syncFirebaseToPrismaPatient(firebaseUid);
+
+      // Sync profile (for cache)
       const syncedProfile = await syncService.syncPatientProfile(firebaseUid);
 
       res.json({ 
         success: true, 
-        message: 'Profile synced successfully',
+        message: 'Profile synced successfully to Prisma',
         profile: syncedProfile
       });
     } catch (error) {

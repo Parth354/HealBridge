@@ -164,7 +164,7 @@ class AuthService {
 
   // Create doctor profile
   async createDoctorProfile(userId, profileData) {
-    const { specialties, licenseNo } = profileData;
+    const { firstName, lastName, email, specialties, licenseNo } = profileData;
 
     // Check if doctor profile already exists
     const existingDoctor = await prisma.doctor.findUnique({
@@ -175,12 +175,25 @@ class AuthService {
       throw new Error('Doctor profile already exists for this user');
     }
 
+    // Update user email if provided
+    if (email) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { email }
+      });
+    }
+
     const doctor = await prisma.doctor.create({
       data: {
         user_id: userId,
+        firstName: firstName || '',
+        lastName: lastName || '',
         specialties,
         licenseNo,
         verifiedStatus: 'PENDING'
+      },
+      include: {
+        user: true
       }
     });
 

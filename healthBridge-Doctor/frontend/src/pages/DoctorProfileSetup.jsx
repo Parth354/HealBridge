@@ -11,33 +11,41 @@ const DoctorProfileSetup = () => {
   const { showSuccess, showError } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Check if user already has profile
+  // Check if user already has profile - if yes, redirect to dashboard
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
     
+    // If user already has a profile, redirect to dashboard (don't show profile setup)
     if (user?.hasProfile) {
-      showSuccess('Profile already exists! Redirecting to dashboard.');
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
       return;
     }
-  }, [isAuthenticated, user, navigate, showSuccess]);
+  }, [isAuthenticated, user, navigate]);
   
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
+    email: '',
     specialties: ['General Medicine'],
     licenseNo: '',
-    experience: '',
-    qualification: '',
+    // Clinic fields (optional)
+    addClinic: false,
     clinicName: '',
     clinicAddress: '',
     clinicLat: '',
     clinicLon: '',
-    phone: '',
-    email: ''
+    houseVisitRadiusKm: 5
   });
+  
+  // Pre-fill email from user if available
+  useEffect(() => {
+    if (user?.email && !formData.email) {
+      setFormData(prev => ({ ...prev, email: user.email || '' }));
+    }
+  }, [user]);
 
   const specialtyOptions = [
     'General Medicine',
@@ -140,6 +148,61 @@ const DoctorProfileSetup = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Name Fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  First Name *
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="John"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name *
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Doe"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email Address *
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="doctor@example.com"
+                  required
+                />
+              </div>
+            </div>
+
             {/* License Number */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -181,15 +244,124 @@ const DoctorProfileSetup = () => {
               )}
             </div>
 
+            {/* Optional Clinic Addition */}
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <input
+                  type="checkbox"
+                  id="addClinic"
+                  checked={formData.addClinic}
+                  onChange={(e) => setFormData({ ...formData, addClinic: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="addClinic" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <Building className="w-4 h-4" />
+                  Add Clinic (Optional)
+                </label>
+              </div>
+
+              {formData.addClinic && (
+                <div className="ml-6 space-y-4 bg-gray-50 p-4 rounded-lg">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Clinic Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.clinicName}
+                      onChange={(e) => setFormData({ ...formData, clinicName: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="City Hospital"
+                      required={formData.addClinic}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Clinic Address *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.clinicAddress}
+                      onChange={(e) => setFormData({ ...formData, clinicAddress: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="123 Main St, City, State, ZIP"
+                      required={formData.addClinic}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Latitude (optional)
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={formData.clinicLat}
+                        onChange={(e) => setFormData({ ...formData, clinicLat: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="28.6139"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Longitude (optional)
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={formData.clinicLon}
+                        onChange={(e) => setFormData({ ...formData, clinicLon: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="77.2090"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      House Visit Radius (km)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={formData.houseVisitRadiusKm}
+                      onChange={(e) => setFormData({ ...formData, houseVisitRadiusKm: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="5"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Maximum distance you're willing to travel for house visits
+                    </p>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-xs text-blue-800">
+                      💡 <strong>Tip:</strong> You can add more clinics later from Settings. 
+                      If you don't have coordinates, leave them blank and update them later.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Submit Button */}
             <div className="pt-6">
               <button
                 type="submit"
-                disabled={isSubmitting || formData.specialties.length === 0 || !formData.licenseNo}
+                disabled={isSubmitting || formData.specialties.length === 0 || !formData.licenseNo || !formData.firstName || !formData.lastName || !formData.email}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? 'Creating Profile...' : 'Complete Setup'}
               </button>
+              {!formData.addClinic && (
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  You can add clinics later from Settings
+                </p>
+              )}
             </div>
           </form>
         </div>

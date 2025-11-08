@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -74,8 +75,14 @@ class AppointmentBookingActivity : AppCompatActivity() {
         }
         
         viewModel.isLoading.observe(this) { isLoading ->
-            binding.progressBar.visibility = if (isLoading) 
-                android.view.View.VISIBLE else android.view.View.GONE
+            // Only show activity progress bar if not on step 3 (confirmation step has its own loader)
+            val currentStep = viewModel.currentStep.value ?: 0
+            if (currentStep != 3) {
+                binding.progressBar.visibility = if (isLoading) 
+                    android.view.View.VISIBLE else android.view.View.GONE
+            } else {
+                binding.progressBar.visibility = View.GONE
+            }
         }
         
         viewModel.canProceed.observe(this) { canProceed ->
@@ -135,15 +142,22 @@ class AppointmentBookingActivity : AppCompatActivity() {
     }
     
     private fun updateNavigationButtons(step: Int) {
-        binding.previousButton.visibility = if (step > 0) 
-            android.view.View.VISIBLE else android.view.View.GONE
-            
-        binding.nextButton.text = when (step) {
-            0 -> "Analyze Symptoms"
-            1 -> "Select Doctor"
-            2 -> "Choose Time"
-            3 -> "Confirm Booking"
-            else -> "Next"
+        // Hide bottom navigation buttons on step 3 (BookingConfirmationFragment has its own confirm button)
+        if (step == 3) {
+            // Hide navigation buttons - fragment has its own confirm button
+            binding.previousButton.visibility = View.GONE
+            binding.nextButton.visibility = View.GONE
+        } else {
+            binding.previousButton.visibility = if (step > 0) 
+                android.view.View.VISIBLE else android.view.View.GONE
+            binding.nextButton.visibility = View.VISIBLE
+                
+            binding.nextButton.text = when (step) {
+                0 -> "Analyze Symptoms"
+                1 -> "Select Doctor"
+                2 -> "Choose Time"
+                else -> "Next"
+            }
         }
     }
     

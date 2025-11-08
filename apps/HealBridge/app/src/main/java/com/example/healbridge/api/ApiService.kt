@@ -31,6 +31,14 @@ interface ApiService {
         @Query("date") date: String
     ): Response<AvailabilityResponse>
     
+    // Get Doctor Schedule Blocks (for displaying doctor's schedule)
+    @GET("api/patient/doctors/{doctorId}/schedule")
+    suspend fun getDoctorSchedule(
+        @Path("doctorId") doctorId: String,
+        @Query("startDate") startDate: String,
+        @Query("endDate") endDate: String
+    ): Response<ScheduleBlockResponse>
+    
     // Slot Hold (Step 1: Reserve slot for 2 minutes)
     @POST("api/patient/bookings/hold")
     suspend fun createSlotHold(@Body request: SlotHoldRequest): Response<SlotHoldResponse>

@@ -210,15 +210,18 @@ class PatientSummaryChatActivity : AppCompatActivity() {
                                 append(answer)
                                 
                                 // Add sources if available
-                                if (summary.ragSources.isNotEmpty()) {
+                                summary.ragSources?.takeIf { it.isNotEmpty() }?.let { sources ->
                                     append("\n\n")
                                     append("📋 Sources:\n")
-                                    summary.ragSources.take(3).forEachIndexed { index, source ->
-                                        append("${index + 1}. ${source.docType} from ${source.date}")
+                                    sources.take(3).forEachIndexed { index, source ->
+                                        append("${index + 1}. ${source.docType}")
                                         if (source.similarity > 0.5) {
-                                            append(" (${(source.similarity * 100).toInt()}% match)\n")
-                                        } else {
-                                            append("\n")
+                                            append(" (${(source.similarity * 100).toInt()}% match)")
+                                        }
+                                        append("\n")
+                                        if (!source.excerpt.isNullOrBlank()) {
+                                            val excerpt = source.excerpt.take(100)
+                                            append("   \"${excerpt}...\"\n")
                                         }
                                     }
                                 }
@@ -230,15 +233,15 @@ class PatientSummaryChatActivity : AppCompatActivity() {
                                 timestamp = System.currentTimeMillis(),
                                 pdfUrl = response.pdfUrl
                             ))
-                        } else if (summary.ragSources.isNotEmpty()) {
+                        } else if (summary.ragSources?.isNotEmpty() == true) {
                             // If no answer but we have sources, show them
                             val sourcesText = buildString {
                                 append("I found some relevant information in your records:\n\n")
-                                summary.ragSources.take(5).forEachIndexed { index, source ->
-                                    append("${index + 1}. ${source.docType} from ${source.date}\n")
+                                summary.ragSources?.take(5)?.forEachIndexed { index, source ->
+                                    append("${index + 1}. ${source.docType}\n")
                                     if (!source.excerpt.isNullOrBlank()) {
                                         val excerpt = source.excerpt.take(200)
-                                        append("   ${excerpt}...\n\n")
+                                        append("   \"${excerpt}...\"\n\n")
                                     }
                                 }
                             }

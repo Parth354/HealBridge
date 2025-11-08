@@ -51,9 +51,21 @@ class AppointmentNotificationService(private val context: Context, workerParams:
             
             val delay = notificationTime.epochSecond - now.epochSecond
             
+            // Get doctor name from Doctor model (firstName/lastName) or fallback
+            val doctorFirstName = appointment.doctor.firstName?.takeIf { it.isNotBlank() } ?: ""
+            val doctorLastName = appointment.doctor.lastName?.takeIf { it.isNotBlank() } ?: ""
+            val doctorName = when {
+                doctorFirstName.isNotEmpty() && doctorLastName.isNotEmpty() -> "Dr. $doctorFirstName $doctorLastName"
+                doctorFirstName.isNotEmpty() -> "Dr. $doctorFirstName"
+                doctorLastName.isNotEmpty() -> "Dr. $doctorLastName"
+                else -> appointment.doctor.user?.let { 
+                    "${it.firstName ?: ""} ${it.lastName ?: ""}".trim().takeIf { it.isNotBlank() } ?: "Dr. Unknown"
+                } ?: "Dr. Unknown"
+            }
+            
             val inputData = workDataOf(
                 "appointmentId" to appointment.id,
-                "doctorName" to "${appointment.doctor.user.firstName} ${appointment.doctor.user.lastName}",
+                "doctorName" to doctorName,
                 "clinicName" to appointment.clinic.name,
                 "clinicAddress" to appointment.clinic.address,
                 "clinicLat" to appointment.clinic.lat.toString(),

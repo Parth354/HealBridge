@@ -83,15 +83,16 @@ const Verify = () => {
         showSuccess('Verification successful!');
         
         // Check if user needs to complete profile
-        if (result.needsProfile) {
+        // If user has profile, go directly to dashboard (don't show profile-setup)
+        if (result.user?.hasProfile) {
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 1500);
+        } else {
+          // User needs to complete profile
           showInfo('Please complete your profile');
           setTimeout(() => {
             navigate('/profile-setup');
-          }, 1500);
-        } else {
-          // User already has profile, go to dashboard
-          setTimeout(() => {
-            navigate('/dashboard');
           }, 1500);
         }
       } else {

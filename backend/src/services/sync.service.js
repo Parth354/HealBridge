@@ -65,6 +65,7 @@ class SyncService {
   /**
    * Get or create user from Firebase authentication
    * Creates PostgreSQL user if doesn't exist
+   * Automatically syncs Firebase profile to Prisma Patient if available
    * 
    * @param {Object} firebaseUser - Firebase user object
    * @param {string} role - User role (PATIENT, DOCTOR, STAFF)
@@ -79,6 +80,12 @@ class SyncService {
 
       if (user) {
         console.log(`✅ User found: ${user.id}`);
+        // Sync Firebase profile to Prisma if user is a patient
+        if (role === 'PATIENT' && !user.patient) {
+          await this.syncFirebaseToPrismaPatient(uid);
+          // Refresh user data
+          user = await this.getUserByFirebaseUid(uid);
+        }
         return user;
       }
 
@@ -98,6 +105,13 @@ class SyncService {
 
       console.log(`✅ Created new user: ${user.id} for Firebase UID: ${uid}`);
 
+      // For patients, try to sync Firebase profile to Prisma Patient
+      if (role === 'PATIENT') {
+        await this.syncFirebaseToPrismaPatient(uid);
+        // Refresh user data
+        user = await this.getUserByFirebaseUid(uid);
+      }
+
       // Cache the new user
       const cacheKey = `${this.CACHE_PREFIX}uid:${uid}`;
       await redisClient.setex(cacheKey, this.CACHE_TTL, JSON.stringify(user));
@@ -106,6 +120,86 @@ class SyncService {
     } catch (error) {
       console.error('Error getting or creating user:', error);
       throw error;
+    }
+  }
+  
+  /**
+   * Sync Firebase patient profile to Prisma Patient table
+   * Creates or updates Patient record in PostgreSQL from Firestore data
+   * 
+   * @param {string} firebaseUid - Firebase user UID
+   * @returns {Promise<Object>} Synced Patient record
+   */
+  async syncFirebaseToPrismaPatient(firebaseUid) {
+    try {
+      console.log(`🔄 Syncing Firebase profile to Prisma Patient for: ${firebaseUid}`);
+      
+      // Get PostgreSQL user
+      const user = await this.getUserByFirebaseUid(firebaseUid);
+      if (!user) {
+        throw new Error(`User not found for Firebase UID: ${firebaseUid}`);
+      }
+      
+      // Get Firestore profile
+      const firestoreProfile = await firestoreService.getPatientProfile(firebaseUid);
+      if (!firestoreProfile) {
+        console.log(`⚠️  No Firestore profile found, skipping Prisma sync`);
+        return null;
+      }
+      
+      // Prepare patient data for Prisma
+      const patientData = {
+        user_id: user.id,
+        name: firestoreProfile.name || `${firestoreProfile.firstName || ''} ${firestoreProfile.lastName || ''}`.trim() || 'Patient',
+        dob: firestoreProfile.dob ? new Date(firestoreProfile.dob) : new Date('1990-01-01'), // Default DOB if not provided
+        gender: firestoreProfile.gender || 'Other',
+        allergies: Array.isArray(firestoreProfile.allergies) 
+          ? firestoreProfile.allergies.join(', ') 
+          : (firestoreProfile.allergies || ''),
+        chronicConditions: firestoreProfile.chronicConditions || '',
+        emergencyContact: firestoreProfile.emergencyContactPhone || firestoreProfile.emergencyContact || '+1234567890',
+        careCircle: [] // Can be populated later
+      };
+      
+      // Check if patient already exists
+      if (user.patient) {
+        // Update existing patient
+        const updatedPatient = await prisma.patient.update({
+          where: { id: user.patient.id },
+          data: {
+            name: patientData.name,
+            dob: patientData.dob,
+            gender: patientData.gender,
+            allergies: patientData.allergies,
+            chronicConditions: patientData.chronicConditions,
+            emergencyContact: patientData.emergencyContact
+          }
+        });
+        
+        console.log(`✅ Updated Prisma Patient record: ${updatedPatient.id}`);
+        
+        // Invalidate cache
+        await this.invalidateUserCache(firebaseUid);
+        
+        return updatedPatient;
+      } else {
+        // Create new patient
+        const newPatient = await prisma.patient.create({
+          data: patientData
+        });
+        
+        console.log(`✅ Created Prisma Patient record: ${newPatient.id}`);
+        
+        // Invalidate cache
+        await this.invalidateUserCache(firebaseUid);
+        
+        return newPatient;
+      }
+    } catch (error) {
+      console.error('Error syncing Firebase to Prisma Patient:', error);
+      // Don't throw - allow the app to continue even if sync fails
+      // The patient can be created/updated later when they book an appointment
+      return null;
     }
   }
 

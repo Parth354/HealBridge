@@ -59,15 +59,8 @@ class HomeFragment : Fragment() {
     }
     
     private fun setupUI() {
-        // Set greeting based on time
-        val calendar = Calendar.getInstance()
-        val hour = calendar.get(Calendar.HOUR_OF_DAY)
-        val greeting = when (hour) {
-            in 0..11 -> "Good Morning"
-            in 12..16 -> "Good Afternoon"
-            else -> "Good Evening"
-        }
-        binding.greetingText.text = greeting
+        // Set greeting to Welcome Back
+        binding.greetingText.text = "Welcome Back"
         
         // Load user name from Firebase Firestore
         loadUserNameFromFirebase()
@@ -110,7 +103,7 @@ class HomeFragment : Fragment() {
                     if (_binding != null) {
                         // Fallback to Firebase Auth displayName
                         val currentUser = auth.currentUser
-                        binding.userNameText.text = currentUser?.displayName ?: "User"
+        binding.userNameText.text = currentUser?.displayName ?: "User"
                     }
                 }
         } else {
@@ -153,14 +146,6 @@ class HomeFragment : Fragment() {
             }
         }
         
-        binding.viewAllRecords.setOnClickListener {
-            // Navigate to records fragment using NavController
-            try {
-                findNavController().navigate(R.id.tab_records)
-            } catch (e: Exception) {
-                android.util.Log.e("HomeFragment", "Error navigating to records: ${e.message}")
-            }
-        }
         
         binding.notificationIcon.setOnClickListener {
             // Handle notifications - show notifications screen
@@ -196,12 +181,22 @@ class HomeFragment : Fragment() {
         
         viewModel.upcomingAppointments.observe(viewLifecycleOwner) { appointments ->
             appointmentsAdapter.submitList(appointments.map { appointmentDetail ->
+                // Get doctor name from Doctor model (firstName/lastName) or fallback to "Doctor"
+                val doctorFirstName = appointmentDetail.doctor.firstName?.takeIf { it.isNotBlank() } ?: ""
+                val doctorLastName = appointmentDetail.doctor.lastName?.takeIf { it.isNotBlank() } ?: ""
+                val doctorName = when {
+                    doctorFirstName.isNotEmpty() && doctorLastName.isNotEmpty() -> "Dr. $doctorFirstName $doctorLastName"
+                    doctorFirstName.isNotEmpty() -> "Dr. $doctorFirstName"
+                    doctorLastName.isNotEmpty() -> "Dr. $doctorLastName"
+                    else -> "Dr. ${appointmentDetail.doctor.user?.email?.split("@")?.get(0) ?: "Unknown"}"
+                }
+                
                 com.example.healbridge.data.models.Appointment(
                     id = appointmentDetail.id,
                     doctorId = appointmentDetail.doctorId,
                     patientId = appointmentDetail.patientId,
-                    doctorName = "Dr. ${appointmentDetail.doctor.user.firstName} ${appointmentDetail.doctor.user.lastName}",
-                    specialty = appointmentDetail.doctor.specialty ?: "General",
+                    doctorName = doctorName,
+                    specialty = appointmentDetail.doctor.specialties?.firstOrNull() ?: "General",
                     appointmentDate = appointmentDetail.startTs.substring(0, 10),
                     appointmentTime = appointmentDetail.startTs.substring(11, 16),
                     status = appointmentDetail.status,

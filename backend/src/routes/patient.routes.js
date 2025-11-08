@@ -1,11 +1,11 @@
 import express from 'express';
 const router = express.Router();
 import patientController from '../controllers/patient.controller.js';
-import { authenticate, requirePatientProfile } from '../middleware/no-auth.middleware.js';
+import { authenticate, requirePatientProfile } from '../middleware/auth.middleware.js';
 import { validate, schemas } from '../middleware/validation.middleware.js';
 import upload from '../middleware/upload.middleware.js';
 
-// Public access - no authentication required
+// All routes require authentication
 router.use(authenticate);
 
 // Test authentication (no profile required)

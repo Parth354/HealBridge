@@ -30,42 +30,42 @@
                 android:padding="20dp">
 
                 <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
 
-                    <TextView
-                        android:id="@+id/greetingText"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Good Morning"
-                        android:textSize="16sp"
+                <TextView
+                    android:id="@+id/greetingText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Welcome Back"
+                    android:textSize="16sp"
                         android:textColor="@android:color/white"
                         android:alpha="0.9" />
 
-                    <TextView
-                        android:id="@+id/userNameText"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="John Doe"
+                <TextView
+                    android:id="@+id/userNameText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="John Doe"
                         android:textSize="28sp"
-                        android:textStyle="bold"
+                    android:textStyle="bold"
                         android:textColor="@android:color/white"
                         android:layout_marginTop="4dp" />
 
-                </LinearLayout>
+            </LinearLayout>
 
-                <ImageView
-                    android:id="@+id/notificationIcon"
+            <ImageView
+                android:id="@+id/notificationIcon"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
-                    android:src="@drawable/ic_notifications"
-                    android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_notifications"
+                android:background="?attr/selectableItemBackgroundBorderless"
                     android:padding="8dp"
                     android:tint="@android:color/white" />
 
-            </LinearLayout>
+        </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>
 
@@ -242,85 +242,6 @@
             android:nestedScrollingEnabled="false"
             tools:listitem="@layout/item_appointment_home" />
 
-        <!-- Medical Records -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="16dp">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Medical Records"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:textColor="@color/text_primary" />
-
-            <TextView
-                android:id="@+id/viewAllRecords"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="View All"
-                android:textColor="@color/primary_color"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:padding="8dp" />
-
-        </LinearLayout>
-
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="2dp"
-            app:strokeWidth="0dp"
-            app:cardBackgroundColor="@color/card_background">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="20dp">
-
-                <ImageView
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:src="@drawable/ic_medical"
-                    android:tint="@color/primary_color"
-                    android:layout_marginEnd="12dp" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Your Medical Records"
-                        android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_primary"
-                        android:layout_marginBottom="4dp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="View and manage your prescriptions, lab reports, and medical documents"
-                        android:textSize="14sp"
-                        android:textColor="@color/text_secondary"
-                        android:lineSpacingExtra="2dp" />
-                </LinearLayout>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
         <!-- Health Tips -->
         <TextView
             android:layout_width="wrap_content"
@@ -359,14 +280,14 @@
                         android:tint="@color/primary_color"
                         android:layout_marginEnd="12dp" />
 
-                    <TextView
-                        android:id="@+id/healthTipTitle"
+                <TextView
+                    android:id="@+id/healthTipTitle"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                    android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Stay Hydrated"
+                    android:text="Stay Hydrated"
                         android:textSize="18sp"
-                        android:textStyle="bold"
+                    android:textStyle="bold"
                         android:textColor="@color/text_primary" />
 
                 </LinearLayout>

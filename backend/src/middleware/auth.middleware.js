@@ -50,27 +50,18 @@ const authenticate = async (req, res, next) => {
         });
 
         if (!user) {
-          // Auto-create user from Firebase token
+          // Import sync service to sync Firebase profile to Prisma
+          const syncService = (await import('../services/sync.service.js')).default;
+          
+          // Auto-create user from Firebase token and sync Firebase profile
           user = await retryDatabaseQuery(async () => {
-            return await prisma.user.create({
-              data: {
-                firebase_uid: firebaseDecoded.uid,
-                email: firebaseDecoded.email,
-                role: 'PATIENT',
-                language: 'en',
-                patient: {
-                  create: {
-                    // Create basic patient record for booking compatibility
-                  }
-                }
-              },
-              include: {
-                patient: true,
-                doctor: true
-              }
-            });
+            return await syncService.getOrCreateUser({
+              uid: firebaseDecoded.uid,
+              email: firebaseDecoded.email,
+              email_verified: firebaseDecoded.email_verified
+            }, 'PATIENT');
           });
-          console.log(`✅ Auto-created Firebase user with patient profile: ${user.id}`);
+          console.log(`✅ Auto-created Firebase user: ${user.id}`);
         }
 
         console.log(`✅ Authenticated via Firebase token: ${user.id}`);

@@ -31,7 +31,7 @@ const queryClient = new QueryClient({
 });
 
 // Protected Route Component
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({ children, allowWithoutProfile = false }) => {
   const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
@@ -49,9 +49,15 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // Redirect to profile setup if no doctor profile
-  if (!user?.hasProfile) {
+  // For profile-setup route, allow access if user doesn't have profile
+  // For other routes, redirect to profile setup if no doctor profile
+  if (!allowWithoutProfile && !user?.hasProfile) {
     return <Navigate to="/profile-setup" replace />;
+  }
+
+  // If user has profile and tries to access profile-setup, redirect to dashboard
+  if (allowWithoutProfile && user?.hasProfile) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;
@@ -111,7 +117,11 @@ function App() {
                 />
                 <Route
                   path="/profile-setup"
-                  element={<DoctorProfileSetup />}
+                  element={
+                    <ProtectedRoute allowWithoutProfile>
+                      <DoctorProfileSetup />
+                    </ProtectedRoute>
+                  }
                 />
 
                 {/* Protected Routes */}

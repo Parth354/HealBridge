@@ -267,13 +267,13 @@ class ApiRepository(private val context: Context? = null) {
                             "00:00" // Fallback
                         }
                         
-                        TimeSlot(
+                    TimeSlot(
                             time = timeStr,
                             isAvailable = true, // Already filtered
                             startTs = slotInfo.startTs,
                             endTs = slotInfo.endTs
-                        )
-                    }
+                    )
+                }
                     .sortedBy { it.time } // Sort by time
                 
                 android.util.Log.d("ApiRepository", "Processed ${slots.size} available slots")
@@ -343,8 +343,8 @@ class ApiRepository(private val context: Context? = null) {
         var lastException: Exception? = null
         repeat(maxRetries + 1) { attempt ->
             try {
-                val response = apiService.getAppointments(status)
-                if (response.isSuccessful && response.body() != null) {
+            val response = apiService.getAppointments(status)
+            if (response.isSuccessful && response.body() != null) {
                     return NetworkResult.Success(response.body()!!)
                 } else {
                     val errorMsg = response.errorBody()?.string() ?: "Failed to get appointments"
@@ -363,7 +363,7 @@ class ApiRepository(private val context: Context? = null) {
                 if (attempt < maxRetries && (e.message?.contains("timeout", ignoreCase = true) == true || e is java.net.UnknownHostException)) {
                     android.util.Log.w("ApiRepository", "Network error loading appointments, retrying... (attempt ${attempt + 1}/${maxRetries + 1})")
                     kotlinx.coroutines.delay((attempt + 1) * 1000L)
-                } else {
+            } else {
                     val errorMsg = when {
                         e.message?.contains("timeout", ignoreCase = true) == true -> "Request timed out. Please check your connection."
                         e is java.net.UnknownHostException -> "Cannot reach server. Please check your internet connection."
@@ -450,8 +450,8 @@ class ApiRepository(private val context: Context? = null) {
         var lastException: Exception? = null
         repeat(maxRetries + 1) { attempt ->
             try {
-                val response = apiService.analyzeSymptoms(request)
-                if (response.isSuccessful && response.body() != null) {
+            val response = apiService.analyzeSymptoms(request)
+            if (response.isSuccessful && response.body() != null) {
                     return NetworkResult.Success(response.body()!!)
                 } else {
                     val errorMsg = response.errorBody()?.string() ?: "Failed to analyze symptoms"
@@ -470,7 +470,7 @@ class ApiRepository(private val context: Context? = null) {
                 if (attempt < maxRetries && e.message?.contains("timeout", ignoreCase = true) == true) {
                     android.util.Log.w("ApiRepository", "Network error analyzing symptoms, retrying... (attempt ${attempt + 1}/${maxRetries + 1})")
                     kotlinx.coroutines.delay((attempt + 1) * 1000L)
-                } else {
+            } else {
                     return NetworkResult.Error(e.message ?: "Network error: ${e.javaClass.simpleName}")
                 }
             }

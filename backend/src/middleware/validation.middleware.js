@@ -57,6 +57,9 @@ const schemas = {
   }),
 
   createDoctorProfile: Joi.object({
+    firstName: Joi.string().min(1).max(100).required(),
+    lastName: Joi.string().min(1).max(100).required(),
+    email: Joi.string().email().optional(),
     specialties: Joi.array().items(Joi.string()).min(1).required(),
     licenseNo: Joi.string().min(6).max(20).required()
   }),

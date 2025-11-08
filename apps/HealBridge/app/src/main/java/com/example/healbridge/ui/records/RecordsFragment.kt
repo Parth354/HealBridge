@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.healbridge.api.SupabaseClient
 import com.example.healbridge.databinding.FragmentRecordsBinding
 import com.example.healbridge.SecurePreferences
+import com.example.healbridge.R
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
@@ -32,6 +33,8 @@ class RecordsFragment : Fragment() {
     private var currentPage = 1
     private var isLoading = false
     private var hasMorePages = true
+    private var lastLoadTime: Long = 0
+    private val RELOAD_THRESHOLD_MS = 5000 // Reload if last load was more than 5 seconds ago
     
     private val documentPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -59,7 +62,28 @@ class RecordsFragment : Fragment() {
         setupRecyclerView()
         setupClickListeners()
         setupSearch()
-        loadRecords()
+        // Load records when fragment is created
+        if (records.isEmpty() && !isLoading) {
+            loadAllRecords()
+        }
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        // Reload all records when fragment becomes visible
+        // This ensures fresh data when navigating to the fragment from home screen
+        // Check if we need to reload (empty records or last load was a while ago)
+        val timeSinceLastLoad = System.currentTimeMillis() - lastLoadTime
+        if (!isLoading && (records.isEmpty() || timeSinceLastLoad > RELOAD_THRESHOLD_MS)) {
+            android.util.Log.d("RecordsFragment", "onResume: Reloading all records (empty=${records.isEmpty()}, timeSinceLastLoad=${timeSinceLastLoad}ms)")
+            records.clear()
+            recordsAdapter.notifyDataSetChanged()
+            currentPage = 1
+            hasMorePages = true
+            loadAllRecords()
+        } else {
+            android.util.Log.d("RecordsFragment", "onResume: Skipping reload (isEmpty=${records.isEmpty()}, isLoading=$isLoading, timeSinceLastLoad=${timeSinceLastLoad}ms)")
+        }
     }
     
     private fun setupRecyclerView() {
@@ -96,6 +120,17 @@ class RecordsFragment : Fragment() {
         
         binding.btnSummary.setOnClickListener {
             showPatientSummary()
+        }
+        
+        // Set up "View All" click listener if the view exists
+        try {
+            val viewAllTextView = binding.root.findViewById<android.widget.TextView>(R.id.tv_view_all)
+            viewAllTextView?.setOnClickListener {
+                // Reload all records when "View All" is clicked
+                loadAllRecords()
+            }
+        } catch (e: Exception) {
+            android.util.Log.d("RecordsFragment", "View All TextView not found or error setting listener: ${e.message}")
         }
     }
     
@@ -189,6 +224,119 @@ class RecordsFragment : Fragment() {
         binding.btnUpload.isEnabled = true
     }
     
+    private fun loadAllRecords() {
+        val uid = SecurePreferences.getUserId(requireContext()) ?: FirebaseAuth.getInstance().currentUser?.uid
+        if (uid == null) {
+            android.util.Log.e("RecordsFragment", "User ID is null, cannot load documents")
+            Toast.makeText(context, "User not authenticated", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        if (isLoading) {
+            android.util.Log.d("RecordsFragment", "Already loading, skipping...")
+            return
+        }
+        
+        android.util.Log.d("RecordsFragment", "Loading ALL documents for user: $uid")
+        isLoading = true
+        records.clear()
+        currentPage = 1
+        hasMorePages = true
+        
+        lifecycleScope.launch {
+            try {
+                var allRecordsLoaded = false
+                var totalCount = 0
+                
+                // Load all records by fetching all pages
+                while (!allRecordsLoaded && hasMorePages) {
+                    val result = supabaseClient.getDocuments(uid, currentPage, 100) // Use larger page size
+                    
+                    result.fold(
+                        onSuccess = { response ->
+                            android.util.Log.d("RecordsFragment", "Documents loaded: success=${response.success}, count=${response.documents.size}, total=${response.totalCount}, page=${response.currentPage}/${response.totalPages}")
+                            
+                            if (response.success) {
+                                totalCount = response.totalCount
+                                
+                                val medRecords = response.documents.map { doc ->
+                                    MedicalRecord(
+                                        id = doc.id,
+                                        title = getDocumentTitle(doc),
+                                        type = doc.type.replaceFirstChar { it.uppercaseChar() },
+                                        date = formatDate(doc.createdAt),
+                                        description = getDocumentDescription(doc),
+                                        fileUrl = doc.fileUrl,
+                                        extractedText = doc.text
+                                    )
+                                }
+                                
+                                records.addAll(medRecords)
+                                recordsAdapter.notifyDataSetChanged()
+                                
+                                // Check if we've loaded all pages
+                                hasMorePages = currentPage < response.totalPages
+                                allRecordsLoaded = !hasMorePages || response.documents.isEmpty()
+                                
+                                if (hasMorePages && !allRecordsLoaded) {
+                                    currentPage++
+                                    android.util.Log.d("RecordsFragment", "Loading next page: $currentPage")
+                                } else {
+                                    android.util.Log.d("RecordsFragment", "All records loaded: ${records.size} total records")
+                                    updateStatistics(totalCount)
+                                    updateEmptyState()
+                                }
+                            } else {
+                                android.util.Log.w("RecordsFragment", "Response indicates failure but no error message")
+                                allRecordsLoaded = true
+                                if (records.isEmpty()) {
+                                    Toast.makeText(context, "No documents found", Toast.LENGTH_SHORT).show()
+                                }
+                                updateStatistics(totalCount)
+                                updateEmptyState()
+                            }
+                        },
+                        onFailure = { error ->
+                            android.util.Log.e("RecordsFragment", "Error loading documents: ${error.message}", error)
+                            allRecordsLoaded = true
+                            // Check if fragment is still attached before showing Toast
+                            if (isAdded && context != null) {
+                                if (records.isEmpty()) {
+                                    Toast.makeText(context, "Error loading documents: ${error.message}", Toast.LENGTH_LONG).show()
+                                } else {
+                                    // If we loaded some records, just show a warning
+                                    android.util.Log.w("RecordsFragment", "Partially loaded records due to error")
+                                }
+                            }
+                            updateStatistics(totalCount)
+                            updateEmptyState()
+                        }
+                    )
+                }
+                
+                // Final update after all records are loaded
+                if (allRecordsLoaded) {
+                    updateStatistics(totalCount)
+                    updateEmptyState()
+                    lastLoadTime = System.currentTimeMillis()
+                    android.util.Log.d("RecordsFragment", "Finished loading all records: ${records.size} records displayed")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("RecordsFragment", "Exception in loadAllRecords: ${e.message}", e)
+                // Check if fragment is still attached before showing Toast
+                if (isAdded && context != null) {
+                    if (records.isEmpty()) {
+                        Toast.makeText(context, "Failed to load documents: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+                updateEmptyState()
+            } finally {
+                isLoading = false
+                lastLoadTime = System.currentTimeMillis()
+            }
+        }
+    }
+    
     private fun loadRecords() {
         val uid = SecurePreferences.getUserId(requireContext()) ?: FirebaseAuth.getInstance().currentUser?.uid
         if (uid == null) {
@@ -238,7 +386,7 @@ class RecordsFragment : Fragment() {
                             android.util.Log.d("RecordsFragment", "Updated UI: ${records.size} records displayed, hasMorePages=$hasMorePages")
                         } else {
                             android.util.Log.w("RecordsFragment", "Response indicates failure but no error message")
-                            if (response.documents.isEmpty()) {
+                            if (response.documents.isEmpty() && records.isEmpty()) {
                                 Toast.makeText(context, "No documents found", Toast.LENGTH_SHORT).show()
                             }
                         }

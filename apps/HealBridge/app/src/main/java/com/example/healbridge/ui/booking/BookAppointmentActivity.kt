@@ -1,6 +1,7 @@
 package com.example.healbridge.ui.booking
 
 import android.os.Bundle
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
@@ -56,10 +57,10 @@ class BookAppointmentActivity : AppCompatActivity() {
                 bio = ""
             )
             
-            // Select the doctor and skip to time slot selection
+            // Select the doctor and skip symptom analyzer - go directly to time slot selection (step 2)
             viewModel.selectDoctor(doctor)
-            viewModel.nextStep() // Go to doctor selection step (will show selected)
-            viewModel.nextStep() // Skip to time slot selection
+            // Skip step 0 (symptom analyzer) and step 1 (doctor selection), go to step 2 (time slot)
+            viewModel.setCurrentStep(2)
         }
     }
     
@@ -82,8 +83,14 @@ class BookAppointmentActivity : AppCompatActivity() {
         }
         
         viewModel.isLoading.observe(this) { isLoading ->
-            binding.progressBar.visibility = if (isLoading) 
-                android.view.View.VISIBLE else android.view.View.GONE
+            // Only show activity progress bar if not on step 3 (confirmation step has its own loader)
+            val currentStep = viewModel.currentStep.value ?: 0
+            if (currentStep != 3) {
+                binding.progressBar.visibility = if (isLoading) 
+                    android.view.View.VISIBLE else android.view.View.GONE
+            } else {
+                binding.progressBar.visibility = View.GONE
+            }
         }
         
         viewModel.canProceed.observe(this) { canProceed ->
@@ -102,15 +109,21 @@ class BookAppointmentActivity : AppCompatActivity() {
     }
     
     private fun updateNavigationButtons(step: Int) {
-        binding.previousButton.visibility = if (step > 0) 
-            android.view.View.VISIBLE else android.view.View.GONE
-            
-        binding.nextButton.text = when (step) {
-            0 -> "Analyze Symptoms"
-            1 -> "Select Doctor"
-            2 -> "Choose Time"
-            3 -> "Confirm Booking"
-            else -> "Next"
+        // Hide bottom navigation buttons on step 3 (BookingConfirmationFragment has its own confirm button)
+        if (step == 3) {
+            binding.bottomNavigation.visibility = View.GONE
+            binding.progressBar.visibility = View.GONE // Hide activity loader on confirmation step
+        } else {
+            binding.bottomNavigation.visibility = View.VISIBLE
+            binding.previousButton.visibility = if (step > 0) 
+                android.view.View.VISIBLE else android.view.View.GONE
+                
+            binding.nextButton.text = when (step) {
+                0 -> "Analyze Symptoms"
+                1 -> "Select Doctor"
+                2 -> "Choose Time"
+                else -> "Next"
+            }
         }
     }
     

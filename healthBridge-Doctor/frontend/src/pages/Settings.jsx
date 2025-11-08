@@ -10,22 +10,56 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { User, Building, CheckCircle, Clock, XCircle, Save, Edit2, Plus, MapPin, Trash2 } from 'lucide-react';
+import { User, Building, CheckCircle, Clock, XCircle, Save, Edit2, Plus, MapPin, Trash2, AlertTriangle } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
   const queryClient = useQueryClient();
   const { updateUser } = useAuth();
+  const { showSuccess, showError, showWarning } = useToast();
 
   // Fetch doctor profile
-  const { data: profileData, isLoading } = useQuery({
+  const { data: profileData, isLoading, error: profileError } = useQuery({
     queryKey: ['doctor-profile'],
     queryFn: async () => {
-      const response = await api.get('/api/doctor/profile');
-      return response.data.doctor;
+      try {
+        const response = await api.get('/api/doctor/profile');
+        return response.data.doctor;
+      } catch (error) {
+        // Handle different error cases
+        if (error.response?.status === 404) {
+          throw new Error('DOCTOR_PROFILE_NOT_FOUND');
+        } else if (error.response?.status === 403) {
+          throw new Error('DOCTOR_PROFILE_REQUIRED');
+        } else if (error.response?.status === 401) {
+          throw new Error('UNAUTHORIZED');
+        }
+        throw error;
+      }
+    },
+    retry: false, // Don't retry on error
+    onError: (error) => {
+      if (error.message === 'DOCTOR_PROFILE_NOT_FOUND') {
+        setErrorMessage('Doctor profile not found. Please create your profile first.');
+        showError('Doctor profile not found. Please complete your profile setup.');
+      } else if (error.message === 'DOCTOR_PROFILE_REQUIRED') {
+        setErrorMessage('Doctor profile is required. Please complete your profile setup.');
+        showError('Doctor profile is required. Please complete your profile setup.');
+      } else if (error.message === 'UNAUTHORIZED') {
+        showError('Session expired. Please login again.');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+      } else {
+        const errorMsg = error.response?.data?.error || error.message || 'Failed to load profile';
+        setErrorMessage(errorMsg);
+        showError(`Failed to load profile: ${errorMsg}`);
+      }
     }
   });
 
@@ -62,10 +96,21 @@ const Settings = () => {
   // Update profile mutation
   const updateProfileMutation = useMutation({
     mutationFn: async (data) => {
-      const response = await api.put('/api/doctor/profile', data);
-      return response.data;
+      try {
+        const response = await api.put('/api/doctor/profile', data);
+        return response.data;
+      } catch (error) {
+        // Enhance error with status code for better handling
+        const enhancedError = new Error(error.response?.data?.error || error.message || 'Failed to update profile');
+        enhancedError.status = error.response?.status;
+        enhancedError.response = error.response;
+        throw enhancedError;
+      }
     },
     onSuccess: (data) => {
+      // Clear any previous error messages
+      setErrorMessage(null);
+      
       // Invalidate queries to refetch profile
       queryClient.invalidateQueries(['doctor-profile']);
       
@@ -100,10 +145,58 @@ const Settings = () => {
       }
       
       setIsEditing(false);
-      alert('Profile updated successfully!');
+      showSuccess('Profile updated successfully!');
     },
     onError: (error) => {
-      alert(error.response?.data?.error || 'Failed to update profile');
+      // Handle different error status codes
+      const status = error.status || error.response?.status;
+      let errorMsg = 'Failed to update profile';
+      
+      switch (status) {
+        case 404:
+          errorMsg = 'Doctor profile not found. Please create your profile first.';
+          setErrorMessage('Doctor profile not found. Please complete your profile setup before updating.');
+          showError(errorMsg);
+          // Redirect to profile setup if profile doesn't exist
+          setTimeout(() => {
+            window.location.href = '/profile-setup';
+          }, 3000);
+          break;
+        case 403:
+          errorMsg = 'You do not have permission to update this profile. Doctor profile is required.';
+          setErrorMessage('Doctor profile is required. Please complete your profile setup.');
+          showError(errorMsg);
+          break;
+        case 401:
+          errorMsg = 'Session expired. Please login again.';
+          setErrorMessage(errorMsg);
+          showError(errorMsg);
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 2000);
+          break;
+        case 400:
+          errorMsg = error.response?.data?.error || 'Invalid data. Please check your inputs and try again.';
+          setErrorMessage(errorMsg);
+          showError(errorMsg);
+          break;
+        case 500:
+          errorMsg = 'Server error. Please try again later or contact support.';
+          setErrorMessage(errorMsg);
+          showError(errorMsg);
+          break;
+        default:
+          // Network error or unknown error
+          if (!error.response) {
+            errorMsg = 'Network error. Please check your internet connection and try again.';
+            setErrorMessage(errorMsg);
+            showError(errorMsg);
+          } else {
+            errorMsg = error.response?.data?.error || error.message || 'Failed to update profile. Please try again.';
+            setErrorMessage(errorMsg);
+            showError(errorMsg);
+          }
+      }
     }
   });
 
@@ -152,10 +245,40 @@ const Settings = () => {
         lon: '',
         houseVisitRadiusKm: 5
       });
-      alert('Clinic added successfully!');
+      showSuccess('Clinic added successfully!');
     },
     onError: (error) => {
-      alert(error.response?.data?.error || 'Failed to add clinic');
+      const status = error.response?.status;
+      let errorMsg = 'Failed to add clinic';
+      
+      switch (status) {
+        case 404:
+          errorMsg = 'Doctor profile not found. Please create your profile first.';
+          break;
+        case 403:
+          errorMsg = 'You do not have permission to add clinics. Doctor profile is required.';
+          break;
+        case 401:
+          errorMsg = 'Session expired. Please login again.';
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 2000);
+          break;
+        case 400:
+          errorMsg = error.response?.data?.error || 'Invalid clinic data. Please check your inputs.';
+          break;
+        case 500:
+          errorMsg = 'Server error. Please try again later.';
+          break;
+        default:
+          if (!error.response) {
+            errorMsg = 'Network error. Please check your internet connection.';
+          } else {
+            errorMsg = error.response?.data?.error || 'Failed to add clinic. Please try again.';
+          }
+      }
+      
+      showError(errorMsg);
     }
   });
 
@@ -217,6 +340,76 @@ const Settings = () => {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Show error state only if profile failed to load (not for update errors)
+  if (profileError && !profileData) {
+    const isProfileNotFound = profileError?.message === 'DOCTOR_PROFILE_NOT_FOUND' || 
+                              profileError?.message === 'DOCTOR_PROFILE_REQUIRED' ||
+                              (profileError?.response?.status === 404) ||
+                              (profileError?.response?.status === 403);
+    
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-lg shadow p-8">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">Profile Error</h2>
+                <p className="text-gray-600 mt-1">
+                  {isProfileNotFound 
+                    ? 'Doctor profile not found' 
+                    : 'Unable to load profile'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-800 font-medium mb-2">Error Details:</p>
+              <p className="text-red-700 text-sm">
+                {profileError?.response?.data?.error || profileError?.message || 'An unknown error occurred'}
+              </p>
+            </div>
+
+            {isProfileNotFound && (
+              <div className="mt-6 space-y-3">
+                <p className="text-gray-700">
+                  It looks like you haven't created your doctor profile yet. Please complete your profile setup to continue.
+                </p>
+                <button
+                  onClick={() => window.location.href = '/profile-setup'}
+                  className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Go to Profile Setup
+                </button>
+              </div>
+            )}
+
+            {!isProfileNotFound && (
+              <div className="mt-6 space-y-3">
+                <button
+                  onClick={() => {
+                    queryClient.invalidateQueries(['doctor-profile']);
+                  }}
+                  className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Retry Loading Profile
+                </button>
+                <button
+                  onClick={() => window.location.href = '/dashboard'}
+                  className="w-full px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Go to Dashboard
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
@@ -300,6 +493,24 @@ const Settings = () => {
               </button>
             )}
           </div>
+
+          {/* Error Message Display */}
+          {errorMessage && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-red-800 font-medium">Error</p>
+                <p className="text-red-700 text-sm mt-1">{errorMessage}</p>
+              </div>
+              <button
+                onClick={() => setErrorMessage(null)}
+                className="text-red-400 hover:text-red-600 transition-colors"
+                aria-label="Dismiss error"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+          )}
 
           {/* Profile Form */}
           <form onSubmit={handleSubmit}>

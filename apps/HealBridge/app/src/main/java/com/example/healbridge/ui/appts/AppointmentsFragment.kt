@@ -15,6 +15,7 @@ import com.example.healbridge.api.ApiRepository
 import com.example.healbridge.data.NetworkResult
 import com.example.healbridge.databinding.FragmentAppointmentsBinding
 import com.example.healbridge.ui.search.DoctorSearchActivity
+import com.example.healbridge.services.NotificationScheduler
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import kotlinx.coroutines.launch
@@ -203,6 +204,80 @@ class AppointmentsFragment : Fragment() {
     }
 }
 
+// Helper function to get doctor name with proper fallbacks - shared by both fragments
+private fun getDoctorName(appointmentDetail: com.example.healbridge.data.models.AppointmentDetail): String {
+    // Try 1: Doctor model firstName/lastName (check for non-null, non-blank, not empty string, not "null")
+    val doctorFirstName = appointmentDetail.doctor.firstName
+        ?.takeIf { it.isNotBlank() && it.trim().lowercase() != "null" && it.trim() != "" }
+    val doctorLastName = appointmentDetail.doctor.lastName
+        ?.takeIf { it.isNotBlank() && it.trim().lowercase() != "null" && it.trim() != "" }
+    
+    // Debug logging (remove in production)
+    android.util.Log.d("AppointmentsFragment", "Doctor firstName: '$doctorFirstName', lastName: '$doctorLastName'")
+    android.util.Log.d("AppointmentsFragment", "Doctor user: ${appointmentDetail.doctor.user?.email}")
+    
+    if (doctorFirstName != null && doctorLastName != null) {
+        return "Dr. $doctorFirstName $doctorLastName"
+    }
+    if (doctorFirstName != null) {
+        return "Dr. $doctorFirstName"
+    }
+    if (doctorLastName != null) {
+        return "Dr. $doctorLastName"
+    }
+    
+    // Try 2: User model firstName/lastName (these shouldn't exist but check anyway)
+    val user = appointmentDetail.doctor.user
+    if (user != null) {
+        val userFirstName = user.firstName?.takeIf { 
+            it.isNotBlank() && it.trim().lowercase() != "null" && it.trim() != "" 
+        }
+        val userLastName = user.lastName?.takeIf { 
+            it.isNotBlank() && it.trim().lowercase() != "null" && it.trim() != "" 
+        }
+        
+        if (userFirstName != null && userLastName != null) {
+            return "Dr. $userFirstName $userLastName"
+        }
+        if (userFirstName != null) {
+            return "Dr. $userFirstName"
+        }
+        if (userLastName != null) {
+            return "Dr. $userLastName"
+        }
+        
+        // Try 3: Extract name from email (most reliable fallback)
+        val email = user.email?.takeIf { it.isNotBlank() }
+        if (email != null && email.contains("@")) {
+            val emailName = email.substringBefore("@")
+                .replace(".", " ")
+                .replace("_", " ")
+                .replace("-", " ")
+                .split(" ")
+                .filter { it.isNotBlank() }
+                .joinToString(" ") { it.replaceFirstChar { char -> char.uppercaseChar() } }
+            if (emailName.isNotBlank()) {
+                return "Dr. $emailName"
+            }
+        }
+        
+        // Try 4: Use phone number last 4 digits if available
+        val phone = user.phone?.takeIf { it.isNotBlank() && it.length >= 4 }
+        if (phone != null) {
+            return "Dr. ${phone.takeLast(4)}"
+        }
+    }
+    
+    // Final fallback - use doctor ID last 6 characters or specialty
+    val specialty = appointmentDetail.doctor.specialties?.firstOrNull() 
+        ?: appointmentDetail.doctor.specialty
+    return if (specialty != null && specialty.isNotBlank()) {
+        "Dr. $specialty"
+    } else {
+        "Dr. ${appointmentDetail.doctor.id.takeLast(6)}"
+    }
+}
+
 // Upcoming Appointments Fragment
 class UpcomingAppointmentsFragment : Fragment() {
     private lateinit var apiRepository: ApiRepository
@@ -233,12 +308,15 @@ class UpcomingAppointmentsFragment : Fragment() {
                         it.status == "CONFIRMED" || it.status == "PENDING" 
                     }
                     adapter.updateAppointments(upcoming.map { appointmentDetail ->
+                        // Get doctor name - try multiple sources with proper null/empty handling
+                        val doctorName = getDoctorName(appointmentDetail)
+                        
                         com.example.healbridge.data.models.Appointment(
                             id = appointmentDetail.id,
                             doctorId = appointmentDetail.doctorId,
                             patientId = appointmentDetail.patientId,
-                            doctorName = appointmentDetail.doctor.user.firstName + " " + appointmentDetail.doctor.user.lastName,
-                            specialty = appointmentDetail.doctor.specialty ?: "General",
+                            doctorName = doctorName,
+                            specialty = appointmentDetail.doctor.specialties?.firstOrNull() ?: appointmentDetail.doctor.specialty ?: "General",
                             appointmentDate = appointmentDetail.startTs.substring(0, 10),
                             appointmentTime = appointmentDetail.startTs.substring(11, 16),
                             status = appointmentDetail.status,
@@ -287,12 +365,15 @@ class PastAppointmentsFragment : Fragment() {
                         it.status == "COMPLETED" || it.status == "CANCELLED" 
                     }
                     adapter.updateAppointments(past.map { appointmentDetail ->
+                        // Get doctor name - try multiple sources with proper null/empty handling
+                        val doctorName = getDoctorName(appointmentDetail)
+                        
                         com.example.healbridge.data.models.Appointment(
                             id = appointmentDetail.id,
                             doctorId = appointmentDetail.doctorId,
                             patientId = appointmentDetail.patientId,
-                            doctorName = appointmentDetail.doctor.user.firstName + " " + appointmentDetail.doctor.user.lastName,
-                            specialty = appointmentDetail.doctor.specialty ?: "General",
+                            doctorName = doctorName,
+                            specialty = appointmentDetail.doctor.specialties?.firstOrNull() ?: appointmentDetail.doctor.specialty ?: "General",
                             appointmentDate = appointmentDetail.startTs.substring(0, 10),
                             appointmentTime = appointmentDetail.startTs.substring(11, 16),
                             status = appointmentDetail.status,

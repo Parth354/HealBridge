@@ -137,9 +137,20 @@ export const AuthProvider = ({ children }) => {
         setAuthToken(response.token);
         localStorage.setItem('authToken', response.token);
         
-        // Check if user has doctor profile
+        // Get fresh user data from backend to check profile status
         let finalUser = response.user;
-        let needsProfile = !response.user.hasProfile;
+        
+        // If user data doesn't have hasProfile, check with backend
+        if (finalUser.hasProfile === undefined) {
+          try {
+            const currentUserResponse = await getCurrentUser(response.token);
+            if (currentUserResponse.success && currentUserResponse.user) {
+              finalUser = currentUserResponse.user;
+            }
+          } catch (error) {
+            console.error('Failed to get current user:', error);
+          }
+        }
         
         // Transform and store user
         const transformedUser = transformBackendUser(finalUser);
@@ -150,7 +161,7 @@ export const AuthProvider = ({ children }) => {
         // Clear pending auth
         setPendingAuth(null);
         
-        return { success: true, user: transformedUser, needsProfile };
+        return { success: true, user: transformedUser };
       }
       
       return { success: false, error: 'Verification failed' };

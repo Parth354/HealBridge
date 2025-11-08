@@ -42,7 +42,7 @@
                     android:id="@+id/tv_doctor_name"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Dr. John Doe"
+                android:text="Dr. John Doe"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:textColor="@color/text_primary" />
@@ -95,8 +95,8 @@
                 android:tint="@color/primary_color"
                 android:layout_marginEnd="12dp" />
 
-            <TextView
-                android:id="@+id/tv_appointment_date"
+        <TextView
+            android:id="@+id/tv_appointment_date"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -120,8 +120,8 @@
                 android:tint="@color/primary_color"
                 android:layout_marginEnd="12dp" />
 
-            <TextView
-                android:id="@+id/tv_appointment_time"
+        <TextView
+            android:id="@+id/tv_appointment_time"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"

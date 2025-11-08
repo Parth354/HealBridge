@@ -28,7 +28,7 @@
             app:boxCornerRadiusBottomStart="12dp"
             app:boxCornerRadiusTopEnd="12dp"
             app:boxCornerRadiusTopStart="12dp"
-            app:hint="Search doctors or specialties...">
+            android:hint="Search doctors or specialties...">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/searchEditText"

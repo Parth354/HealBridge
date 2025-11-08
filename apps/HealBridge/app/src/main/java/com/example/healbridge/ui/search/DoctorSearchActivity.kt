@@ -61,8 +61,8 @@ class DoctorSearchActivity : AppCompatActivity() {
                 putExtra("clinic_name", doctor.clinicName)
             }
             startActivity(intent)
-            finish()
-        }
+        finish()
+    }
         
         binding.recyclerViewDoctors.apply {
             layoutManager = LinearLayoutManager(this@DoctorSearchActivity)

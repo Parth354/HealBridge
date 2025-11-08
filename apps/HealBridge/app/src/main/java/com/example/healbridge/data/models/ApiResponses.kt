@@ -34,18 +34,21 @@ data class AppointmentDetail(
 
 data class DoctorInfo(
     val id: String,
-    val user: UserInfo,
-    val specialty: String,
+    val user: UserInfo?,
+    val firstName: String? = null,
+    val lastName: String? = null,
+    val specialty: String? = null,
+    val specialties: List<String>? = null,
     val experience: Int?,
     val rating: Double?,
     val consultationFee: Double?
 )
 
 data class UserInfo(
-    val firstName: String,
-    val lastName: String,
-    val email: String?,
-    val phone: String?
+    val firstName: String? = null,
+    val lastName: String? = null,
+    val email: String? = null,
+    val phone: String? = null
 )
 
 data class ClinicInfo(
@@ -177,4 +180,31 @@ data class ErrorResponse(
     val error: String,
     val message: String?,
     val details: String?
+)
+
+// Schedule Block Response - matches backend format
+data class ScheduleBlockResponse(
+    val scheduleBlocks: List<ScheduleBlock>,
+    val appointments: List<AppointmentDetail>? = null,
+    val summary: ScheduleSummary? = null
+)
+
+data class ScheduleBlock(
+    val id: String,
+    @SerializedName("doctor_id") val doctorId: String,
+    @SerializedName("clinic_id") val clinicId: String,
+    @SerializedName("startTs") val startTs: String, // ISO 8601 format
+    @SerializedName("endTs") val endTs: String, // ISO 8601 format
+    @SerializedName("slotMinutes") val slotMinutes: Int = 15,
+    @SerializedName("bufferMinutes") val bufferMinutes: Int = 0,
+    val type: String = "work", // "work", "break", "holiday"
+    val clinic: ClinicInfo? = null
+)
+
+data class ScheduleSummary(
+    @SerializedName("workingBlocks") val workingBlocks: Int = 0,
+    val breaks: Int = 0,
+    val holidays: Int = 0,
+    @SerializedName("totalAppointments") val totalAppointments: Int = 0,
+    @SerializedName("confirmedAppointments") val confirmedAppointments: Int = 0
 )

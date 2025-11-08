@@ -143,7 +143,7 @@ class BookingConfirmationFragment : Fragment() {
                 .addOnFailureListener {
                     // Silently fail - user can enter address manually
                     android.util.Log.d("BookingConfirmation", "Failed to load address: ${it.message}")
-                }
+            }
         }
     }
     

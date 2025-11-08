@@ -24,40 +24,40 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
+        android:orientation="vertical"
                 android:padding="24dp"
                 android:paddingBottom="20dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="My Appointments"
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="My Appointments"
                     android:textColor="@android:color/white"
                     android:textSize="28sp"
-                    android:textStyle="bold" />
+            android:textStyle="bold" />
 
-                <TextView
-                    android:id="@+id/tv_appointments_count"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+        <TextView
+            android:id="@+id/tv_appointments_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="0 upcoming appointments"
+            android:text="0 upcoming appointments"
                     android:textColor="@android:color/white"
                     android:textSize="16sp"
                     android:alpha="0.9" />
 
-            </LinearLayout>
+    </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Tab Layout -->
-        <com.google.android.material.tabs.TabLayout
-            android:id="@+id/tab_layout"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@color/white"
-            app:tabIndicatorColor="@color/primary"
-            app:tabSelectedTextColor="@color/primary"
+    <!-- Tab Layout -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tab_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/white"
+        app:tabIndicatorColor="@color/primary"
+        app:tabSelectedTextColor="@color/primary"
             app:tabTextColor="@color/text_secondary"
             app:tabIndicatorHeight="3dp"
             app:tabIndicatorFullWidth="false"
