@@ -436,7 +436,7 @@ class ApiRepository(private val context: Context? = null) {
         }
     }
     
-    suspend fun updatePatientProfile(profile: Map<String, Any>): NetworkResult<ProfileResponse> {
+    suspend fun updatePatientProfile(profile: com.example.healbridge.data.models.UpdatePatientProfileRequest): NetworkResult<ProfileResponse> {
         return try {
             val response = apiService.updatePatientProfile(profile)
             if (response.isSuccessful && response.body() != null) {
@@ -453,7 +453,7 @@ class ApiRepository(private val context: Context? = null) {
         }
     }
     
-    suspend fun createPatientProfile(profile: Map<String, Any>): NetworkResult<ProfileResponse> {
+    suspend fun createPatientProfile(profile: com.example.healbridge.data.models.CreatePatientProfileRequest): NetworkResult<ProfileResponse> {
         return try {
             val response = apiService.createPatientProfile(profile)
             if (response.isSuccessful && response.body() != null) {

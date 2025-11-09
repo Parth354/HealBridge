@@ -139,6 +139,37 @@ data class AddressData(
     val pinCode: String?
 )
 
+// Request models for creating/updating patient profile
+data class CreatePatientProfileRequest(
+    val name: String,
+    val dob: String, // YYYY-MM-DD format
+    val gender: String, // Male, Female, Other, Prefer not to say
+    val allergies: String = "", // Comma-separated string
+    val chronicConditions: String = "", // Comma-separated string
+    val emergencyContact: String, // 10 digits
+    val phoneNumber: String? = null,
+    val address: AddressData? = null,
+    val language: String? = null,
+    val consentDataUse: Boolean = false,
+    val consentNotifications: Boolean = false
+)
+
+data class UpdatePatientProfileRequest(
+    val firstName: String? = null,
+    val lastName: String? = null,
+    val email: String? = null,
+    val phoneNumber: String? = null,
+    val dob: String? = null, // YYYY-MM-DD format
+    val gender: String? = null,
+    val allergies: List<String>? = null, // Array format for update
+    val conditions: List<String>? = null, // Array format for update
+    val emergencyContactPhone: String? = null,
+    val address: AddressData? = null,
+    val language: String? = null,
+    val consentDataUse: Boolean? = null,
+    val consentNotifications: Boolean? = null
+)
+
 // Triage Response (updated)
 data class CategoriesResponse(
     val categories: List<CategoryInfo>

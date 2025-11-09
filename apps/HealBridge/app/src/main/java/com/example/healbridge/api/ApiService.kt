@@ -5,6 +5,8 @@ import com.example.healbridge.data.models.OTPRequest
 import com.example.healbridge.data.models.OTPResponse
 import com.example.healbridge.data.models.VerifyOTPRequest
 import com.example.healbridge.data.models.LoginResponse
+import com.example.healbridge.data.models.CreatePatientProfileRequest
+import com.example.healbridge.data.models.UpdatePatientProfileRequest
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -74,11 +76,11 @@ interface ApiService {
     suspend fun getPatientProfile(): Response<ProfileResponse>
     
     @PUT("api/patient/profile")
-    suspend fun updatePatientProfile(@Body profile: Map<String, Any>): Response<ProfileResponse>
+    suspend fun updatePatientProfile(@Body profile: UpdatePatientProfileRequest): Response<ProfileResponse>
     
     // Create Patient Profile (via auth routes)
     @POST("api/auth/patient/profile")
-    suspend fun createPatientProfile(@Body profile: Map<String, Any>): Response<ProfileResponse>
+    suspend fun createPatientProfile(@Body profile: CreatePatientProfileRequest): Response<ProfileResponse>
     
     // Triage
     @POST("api/patient/triage/analyze")

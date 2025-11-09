@@ -287,54 +287,48 @@ class UserDetails : AppCompatActivity() {
         val pinCode = binding.etPin.text.toString().trim()
         val language = binding.etLanguage.text.toString().trim()
         
-        // Build profile data - use HashMap to avoid type variable issues
-        val profileData = hashMapOf<String, Any>(
-            "firstName" to firstName,
-            "lastName" to lastName,
-            "dob" to dob,
-            "gender" to gender,
-            "emergencyContactPhone" to emergencyContact
-        )
-        
-        if (phoneNumber.isNotEmpty()) {
-            profileData["phoneNumber"] = phoneNumber
-        }
-        
-        // Add allergies - convert to list format for update (backend handles both array and string)
+        // Convert allergies and conditions to lists for update request
         val allergiesList = if (allergiesText.isNotEmpty()) {
             allergiesText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         } else {
             listOf<String>()
         }
-        profileData["allergies"] = allergiesList
         
-        // Add chronic conditions - convert to list format for update (backend handles both array and string)
         val conditionsList = if (chronicConditionsText.isNotEmpty()) {
             chronicConditionsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         } else {
             listOf<String>()
         }
-        profileData["conditions"] = conditionsList
         
         // Build address if any field is filled
-        if (houseNo.isNotEmpty() || locality.isNotEmpty() || city.isNotEmpty() || 
+        val addressData = if (houseNo.isNotEmpty() || locality.isNotEmpty() || city.isNotEmpty() || 
             state.isNotEmpty() || pinCode.isNotEmpty()) {
-            // Use non-nullable String type to avoid Retrofit type variable error
-            val addressMap = mutableMapOf<String, String>()
-            if (houseNo.isNotEmpty()) addressMap["houseNo"] = houseNo
-            if (locality.isNotEmpty()) addressMap["locality"] = locality
-            if (city.isNotEmpty()) addressMap["city"] = city
-            if (state.isNotEmpty()) addressMap["state"] = state
-            if (pinCode.isNotEmpty()) addressMap["pinCode"] = pinCode
-            profileData["address"] = addressMap
+            com.example.healbridge.data.models.AddressData(
+                houseNo = houseNo.takeIf { it.isNotEmpty() },
+                locality = locality.takeIf { it.isNotEmpty() },
+                city = city.takeIf { it.isNotEmpty() },
+                state = state.takeIf { it.isNotEmpty() },
+                pinCode = pinCode.takeIf { it.isNotEmpty() }
+            )
+        } else {
+            null
         }
         
-        if (language.isNotEmpty()) {
-            profileData["language"] = language
-        }
-        
-        profileData["consentDataUse"] = binding.cbConsentData.isChecked
-        profileData["consentNotifications"] = binding.cbConsentNotif.isChecked
+        // Build update profile request
+        val updateProfileRequest = com.example.healbridge.data.models.UpdatePatientProfileRequest(
+            firstName = firstName,
+            lastName = lastName,
+            phoneNumber = phoneNumber.takeIf { it.isNotEmpty() },
+            dob = dob,
+            gender = gender,
+            allergies = allergiesList.takeIf { it.isNotEmpty() },
+            conditions = conditionsList.takeIf { it.isNotEmpty() },
+            emergencyContactPhone = emergencyContact,
+            address = addressData,
+            language = language.takeIf { it.isNotEmpty() },
+            consentDataUse = binding.cbConsentData.isChecked,
+            consentNotifications = binding.cbConsentNotif.isChecked
+        )
         
         // Show loading
         binding.btnSave.isEnabled = false
@@ -350,8 +344,7 @@ class UserDetails : AppCompatActivity() {
                 }
                 
                 if (!hasProfile) {
-                    // Create new profile - backend expects name, dob, gender, emergencyContact, allergies, chronicConditions
-                    // Convert allergies and conditions from list to comma-separated string for backend
+                    // Create new profile - convert allergies and conditions to comma-separated strings
                     val allergiesString = if (allergiesText.isNotEmpty()) {
                         allergiesText.split(",").map { it.trim() }.filter { it.isNotEmpty() }.joinToString(", ")
                     } else {
@@ -364,48 +357,28 @@ class UserDetails : AppCompatActivity() {
                         ""
                     }
                     
-                    // Use HashMap to avoid type variable issues with mapOf
-                    val createProfileData = hashMapOf<String, Any>(
-                        "name" to "$firstName $lastName",
-                        "dob" to dob,
-                        "gender" to gender,
-                        "allergies" to allergiesString,
-                        "chronicConditions" to conditionsString,
-                        "emergencyContact" to emergencyContact
+                    // Build create profile request with all fields
+                    val createProfileRequest = com.example.healbridge.data.models.CreatePatientProfileRequest(
+                        name = "$firstName $lastName",
+                        dob = dob,
+                        gender = gender,
+                        allergies = allergiesString,
+                        chronicConditions = conditionsString,
+                        emergencyContact = emergencyContact,
+                        phoneNumber = phoneNumber.takeIf { it.isNotEmpty() },
+                        address = addressData,
+                        language = language.takeIf { it.isNotEmpty() },
+                        consentDataUse = binding.cbConsentData.isChecked,
+                        consentNotifications = binding.cbConsentNotif.isChecked
                     )
                     
                     // Call create profile endpoint
-                    val createResult = apiRepository.createPatientProfile(createProfileData)
+                    val createResult = apiRepository.createPatientProfile(createProfileRequest)
                     when (createResult) {
                         is NetworkResult.Success -> {
-                            // Profile created successfully
-                            // Check if there are additional fields (address, language, consent) that need to be updated
-                            val hasAdditionalData = (houseNo.isNotEmpty() || locality.isNotEmpty() || city.isNotEmpty() || 
-                                state.isNotEmpty() || pinCode.isNotEmpty() || language.isNotEmpty())
-                            
-                            if (hasAdditionalData) {
-                                // Update with additional data (address, language, etc.)
-                                val updateResult = apiRepository.updatePatientProfile(profileData)
-                                when (updateResult) {
-                                    is NetworkResult.Success -> {
-                                        Toast.makeText(this@UserDetails, "Profile saved successfully", Toast.LENGTH_SHORT).show()
-                                        startActivity(Intent(this@UserDetails, Home::class.java))
-                                        finish()
-                                    }
-                                    is NetworkResult.Error -> {
-                                        // Profile created but update failed - still navigate
-                                        Toast.makeText(this@UserDetails, "Profile created. Some details may need updating.", Toast.LENGTH_SHORT).show()
-                                        startActivity(Intent(this@UserDetails, Home::class.java))
-                                        finish()
-                                    }
-                                    is NetworkResult.Loading -> {}
-                                }
-                            } else {
-                                // No additional data to update
-                                Toast.makeText(this@UserDetails, "Profile saved successfully", Toast.LENGTH_SHORT).show()
-                                startActivity(Intent(this@UserDetails, Home::class.java))
-                                finish()
-                            }
+                            Toast.makeText(this@UserDetails, "Profile saved successfully", Toast.LENGTH_SHORT).show()
+                            startActivity(Intent(this@UserDetails, Home::class.java))
+                            finish()
                         }
                         is NetworkResult.Error -> {
                             binding.btnSave.isEnabled = true
@@ -416,7 +389,7 @@ class UserDetails : AppCompatActivity() {
                     }
                 } else {
                     // Update existing profile
-                    val result = apiRepository.updatePatientProfile(profileData)
+                    val result = apiRepository.updatePatientProfile(updateProfileRequest)
                     when (result) {
                         is NetworkResult.Success -> {
                             Toast.makeText(this@UserDetails, "Profile saved successfully", Toast.LENGTH_SHORT).show()

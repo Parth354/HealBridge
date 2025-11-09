@@ -149,7 +149,19 @@ class AuthService {
 
   // Create patient profile
   async createPatientProfile(userId, profileData) {
-    const { name, dob, gender, allergies, chronicConditions, emergencyContact } = profileData;
+    const { 
+      name, 
+      dob, 
+      gender, 
+      allergies, 
+      chronicConditions, 
+      emergencyContact,
+      phoneNumber,
+      address,
+      language,
+      consentDataUse,
+      consentNotifications
+    } = profileData;
 
     // Normalize gender: "Prefer not to say" -> "Other"
     const normalizedGender = gender === 'Prefer not to say' ? 'Other' : gender;
@@ -168,6 +180,23 @@ class AuthService {
       throw new Error('Invalid date format');
     }
 
+    // Update user phone and language if provided
+    const userUpdateData = {};
+    if (phoneNumber) {
+      userUpdateData.phone = phoneNumber;
+    }
+    if (language) {
+      userUpdateData.language = language;
+    }
+    
+    if (Object.keys(userUpdateData).length > 0) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: userUpdateData
+      });
+    }
+
+    // Create patient profile
     const patient = await prisma.patient.create({
       data: {
         user_id: userId,
@@ -182,6 +211,10 @@ class AuthService {
         user: true
       }
     });
+
+    // Note: Address and consent fields are not stored in the Patient model
+    // These can be updated via the update profile endpoint if needed
+    // The frontend should call updateProfile after creation if address/consent data is provided
 
     return patient;
   }

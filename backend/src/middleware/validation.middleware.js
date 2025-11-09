@@ -53,7 +53,18 @@ const schemas = {
     gender: Joi.string().valid('Male', 'Female', 'Other', 'Prefer not to say').required(),
     allergies: Joi.string().max(500).allow('').optional(),
     chronicConditions: Joi.string().max(500).allow('').optional(),
-    emergencyContact: Joi.string().pattern(/^[0-9]{10}$/).required()
+    emergencyContact: Joi.string().pattern(/^[0-9]{10}$/).required(),
+    phoneNumber: Joi.string().pattern(/^[0-9]{10}$/).optional(),
+    address: Joi.object({
+      houseNo: Joi.string().max(100).optional(),
+      locality: Joi.string().max(200).optional(),
+      city: Joi.string().max(100).optional(),
+      state: Joi.string().max(100).optional(),
+      pinCode: Joi.string().max(10).optional()
+    }).optional(),
+    language: Joi.string().max(50).optional(),
+    consentDataUse: Joi.boolean().optional(),
+    consentNotifications: Joi.boolean().optional()
   }),
 
   createDoctorProfile: Joi.object({
