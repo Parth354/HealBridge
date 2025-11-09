@@ -48,6 +48,14 @@ class AuthController {
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
       
+      // Parse allergies and conditions from comma-separated string to array
+      const allergiesArray = patient.allergies 
+        ? patient.allergies.split(',').map(a => a.trim()).filter(a => a.length > 0)
+        : [];
+      const conditionsArray = patient.chronicConditions
+        ? patient.chronicConditions.split(',').map(c => c.trim()).filter(c => c.length > 0)
+        : [];
+      
       res.json({ 
         success: true, 
         profile: {
@@ -57,8 +65,8 @@ class AuthController {
           phoneNumber: patient.user?.phone || '',
           dob: patient.dob.toISOString().split('T')[0],
           gender: patient.gender,
-          allergies: patient.allergies ? patient.allergies.split(', ').filter(a => a.trim()) : [],
-          conditions: patient.chronicConditions ? patient.chronicConditions.split(', ').filter(c => c.trim()) : [],
+          allergies: allergiesArray,
+          conditions: conditionsArray,
           emergencyContactPhone: patient.emergencyContact
         },
         hasProfile: true

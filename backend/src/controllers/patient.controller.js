@@ -42,6 +42,15 @@ class PatientController {
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
 
+      // Parse allergies and conditions from comma-separated string to array
+      // Handle both comma-space and comma-only separators
+      const allergiesArray = patient.allergies 
+        ? patient.allergies.split(',').map(a => a.trim()).filter(a => a.length > 0)
+        : [];
+      const conditionsArray = patient.chronicConditions
+        ? patient.chronicConditions.split(',').map(c => c.trim()).filter(c => c.length > 0)
+        : [];
+      
       // Transform to frontend format
       const profile = {
         firstName,
@@ -50,8 +59,8 @@ class PatientController {
         phoneNumber: patient.user.phone || '',
         dob: patient.dob.toISOString().split('T')[0],
         gender: patient.gender,
-        allergies: patient.allergies ? patient.allergies.split(', ').filter(a => a.trim()) : [],
-        conditions: patient.chronicConditions ? patient.chronicConditions.split(', ').filter(c => c.trim()) : [],
+        allergies: allergiesArray,
+        conditions: conditionsArray,
         emergencyContactName: null,
         emergencyContactPhone: patient.emergencyContact
       };
@@ -98,16 +107,26 @@ class PatientController {
         updateData.gender = profileData.gender;
       }
       
-      if (profileData.allergies) {
-        updateData.allergies = Array.isArray(profileData.allergies) 
-          ? profileData.allergies.join(', ') 
-          : profileData.allergies;
+      // Handle allergies - support both array and string formats
+      if (profileData.allergies !== undefined) {
+        if (Array.isArray(profileData.allergies)) {
+          updateData.allergies = profileData.allergies.length > 0 
+            ? profileData.allergies.join(', ') 
+            : '';
+        } else if (typeof profileData.allergies === 'string') {
+          updateData.allergies = profileData.allergies.trim();
+        }
       }
       
-      if (profileData.conditions) {
-        updateData.chronicConditions = Array.isArray(profileData.conditions)
-          ? profileData.conditions.join(', ')
-          : profileData.conditions;
+      // Handle chronic conditions - support both array and string formats
+      if (profileData.conditions !== undefined) {
+        if (Array.isArray(profileData.conditions)) {
+          updateData.chronicConditions = profileData.conditions.length > 0
+            ? profileData.conditions.join(', ')
+            : '';
+        } else if (typeof profileData.conditions === 'string') {
+          updateData.chronicConditions = profileData.conditions.trim();
+        }
       }
       
       if (profileData.emergencyContactPhone) {
@@ -137,6 +156,14 @@ class PatientController {
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
 
+      // Parse allergies and conditions from comma-separated string to array
+      const allergiesArray = patient.allergies 
+        ? patient.allergies.split(',').map(a => a.trim()).filter(a => a.length > 0)
+        : [];
+      const conditionsArray = patient.chronicConditions
+        ? patient.chronicConditions.split(',').map(c => c.trim()).filter(c => c.length > 0)
+        : [];
+      
       res.json({ 
         success: true, 
         profile: {
@@ -146,8 +173,8 @@ class PatientController {
           phoneNumber: patient.user.phone || '',
           dob: patient.dob.toISOString().split('T')[0],
           gender: patient.gender,
-          allergies: patient.allergies ? patient.allergies.split(', ').filter(a => a.trim()) : [],
-          conditions: patient.chronicConditions ? patient.chronicConditions.split(', ').filter(c => c.trim()) : [],
+          allergies: allergiesArray,
+          conditions: conditionsArray,
           emergencyContactPhone: patient.emergencyContact
         }
       });

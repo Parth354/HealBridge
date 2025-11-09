@@ -100,6 +100,15 @@ class UserDetails : AppCompatActivity() {
         binding.etDob.setText(profile.dob ?: "")
         binding.etGender.setText(profile.gender ?: "")
         binding.etLanguage.setText(profile.language ?: "")
+        binding.etEmergencyContact.setText(profile.emergencyContactPhone ?: "")
+        
+        // Handle allergies - convert List to comma-separated string
+        val allergiesText = profile.allergies?.joinToString(", ") ?: ""
+        binding.etAllergies.setText(allergiesText)
+        
+        // Handle chronic conditions - convert List to comma-separated string
+        val conditionsText = profile.conditions?.joinToString(", ") ?: ""
+        binding.etChronicConditions.setText(conditionsText)
         
         // Handle address
         profile.address?.let { addr ->
@@ -259,28 +268,59 @@ class UserDetails : AppCompatActivity() {
             return
         }
         
-        // Build profile data
-        val profileData = mutableMapOf<String, Any>(
+        // Get emergency contact - required for profile creation
+        val emergencyContact = binding.etEmergencyContact.text.toString().trim()
+        if (emergencyContact.isEmpty() || emergencyContact.length != 10) {
+            Toast.makeText(this, "Emergency contact phone number (10 digits) is required", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        // Get allergies and chronic conditions
+        val allergiesText = binding.etAllergies.text.toString().trim()
+        val chronicConditionsText = binding.etChronicConditions.text.toString().trim()
+        
+        // Get address fields
+        val houseNo = binding.etHouse.text.toString().trim()
+        val locality = binding.etLocality.text.toString().trim()
+        val city = binding.etCity.text.toString().trim()
+        val state = binding.etState.text.toString().trim()
+        val pinCode = binding.etPin.text.toString().trim()
+        val language = binding.etLanguage.text.toString().trim()
+        
+        // Build profile data - use HashMap to avoid type variable issues
+        val profileData = hashMapOf<String, Any>(
             "firstName" to firstName,
             "lastName" to lastName,
             "dob" to dob,
-            "gender" to gender
+            "gender" to gender,
+            "emergencyContactPhone" to emergencyContact
         )
         
         if (phoneNumber.isNotEmpty()) {
             profileData["phoneNumber"] = phoneNumber
         }
         
-        // Build address if any field is filled
-        val houseNo = binding.etHouse.text.toString().trim()
-        val locality = binding.etLocality.text.toString().trim()
-        val city = binding.etCity.text.toString().trim()
-        val state = binding.etState.text.toString().trim()
-        val pinCode = binding.etPin.text.toString().trim()
+        // Add allergies - convert to list format for update (backend handles both array and string)
+        val allergiesList = if (allergiesText.isNotEmpty()) {
+            allergiesText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        } else {
+            listOf<String>()
+        }
+        profileData["allergies"] = allergiesList
         
+        // Add chronic conditions - convert to list format for update (backend handles both array and string)
+        val conditionsList = if (chronicConditionsText.isNotEmpty()) {
+            chronicConditionsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        } else {
+            listOf<String>()
+        }
+        profileData["conditions"] = conditionsList
+        
+        // Build address if any field is filled
         if (houseNo.isNotEmpty() || locality.isNotEmpty() || city.isNotEmpty() || 
             state.isNotEmpty() || pinCode.isNotEmpty()) {
-            val addressMap = mutableMapOf<String, String?>()
+            // Use non-nullable String type to avoid Retrofit type variable error
+            val addressMap = mutableMapOf<String, String>()
             if (houseNo.isNotEmpty()) addressMap["houseNo"] = houseNo
             if (locality.isNotEmpty()) addressMap["locality"] = locality
             if (city.isNotEmpty()) addressMap["city"] = city
@@ -289,7 +329,6 @@ class UserDetails : AppCompatActivity() {
             profileData["address"] = addressMap
         }
         
-        val language = binding.etLanguage.text.toString().trim()
         if (language.isNotEmpty()) {
             profileData["language"] = language
         }
@@ -311,23 +350,41 @@ class UserDetails : AppCompatActivity() {
                 }
                 
                 if (!hasProfile) {
-                    // Create new profile - backend expects name, dob, gender, emergencyContact
-                    val emergencyContactPhone = if (phoneNumber.length == 10) phoneNumber else "1234567890"
-                    val createProfileData = mapOf(
+                    // Create new profile - backend expects name, dob, gender, emergencyContact, allergies, chronicConditions
+                    // Convert allergies and conditions from list to comma-separated string for backend
+                    val allergiesString = if (allergiesText.isNotEmpty()) {
+                        allergiesText.split(",").map { it.trim() }.filter { it.isNotEmpty() }.joinToString(", ")
+                    } else {
+                        ""
+                    }
+                    
+                    val conditionsString = if (chronicConditionsText.isNotEmpty()) {
+                        chronicConditionsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }.joinToString(", ")
+                    } else {
+                        ""
+                    }
+                    
+                    // Use HashMap to avoid type variable issues with mapOf
+                    val createProfileData = hashMapOf<String, Any>(
                         "name" to "$firstName $lastName",
                         "dob" to dob,
                         "gender" to gender,
-                        "allergies" to "",
-                        "chronicConditions" to "",
-                        "emergencyContact" to emergencyContactPhone
+                        "allergies" to allergiesString,
+                        "chronicConditions" to conditionsString,
+                        "emergencyContact" to emergencyContact
                     )
                     
                     // Call create profile endpoint
                     val createResult = apiRepository.createPatientProfile(createProfileData)
                     when (createResult) {
                         is NetworkResult.Success -> {
-                            // Profile created, now update with additional data if needed
-                            if (profileData.size > 4) { // More than just firstName, lastName, dob, gender
+                            // Profile created successfully
+                            // Check if there are additional fields (address, language, consent) that need to be updated
+                            val hasAdditionalData = (houseNo.isNotEmpty() || locality.isNotEmpty() || city.isNotEmpty() || 
+                                state.isNotEmpty() || pinCode.isNotEmpty() || language.isNotEmpty())
+                            
+                            if (hasAdditionalData) {
+                                // Update with additional data (address, language, etc.)
                                 val updateResult = apiRepository.updatePatientProfile(profileData)
                                 when (updateResult) {
                                     is NetworkResult.Success -> {
