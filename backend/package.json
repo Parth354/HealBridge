@@ -12,6 +12,8 @@
     "prisma:db:push": "prisma db push --schema=./src/prisma/schema.prisma",
     "prisma:studio": "prisma studio --schema=./src/prisma/schema.prisma",
     "prisma:seed": "node src/prisma/seed.js",
+    "prisma:update-patient": "node scripts/update-patient-profiles.js",
+    "prisma:verify-patient": "node scripts/verify-schema.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
