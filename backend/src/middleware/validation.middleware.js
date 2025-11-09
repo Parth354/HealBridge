@@ -46,8 +46,11 @@ const schemas = {
 
   createPatientProfile: Joi.object({
     name: Joi.string().min(2).max(100).required(),
-    dob: Joi.date().max('now').required(),
-    gender: Joi.string().valid('Male', 'Female', 'Other').required(),
+    dob: Joi.alternatives().try(
+      Joi.date().max('now'),
+      Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/) // YYYY-MM-DD format
+    ).required(),
+    gender: Joi.string().valid('Male', 'Female', 'Other', 'Prefer not to say').required(),
     allergies: Joi.string().max(500).allow('').optional(),
     chronicConditions: Joi.string().max(500).allow('').optional(),
     emergencyContact: Joi.string().pattern(/^[0-9]{10}$/).required()

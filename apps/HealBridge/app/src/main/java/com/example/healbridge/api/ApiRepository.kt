@@ -442,9 +442,13 @@ class ApiRepository(private val context: Context? = null) {
             if (response.isSuccessful && response.body() != null) {
                 NetworkResult.Success(response.body()!!)
             } else {
-                NetworkResult.Error("Failed to update profile", response.code())
+                // Parse error response
+                val errorBody = response.errorBody()?.string()
+                val errorMessage = parseErrorMessage(errorBody, response.code(), "update profile")
+                NetworkResult.Error(errorMessage, response.code())
             }
         } catch (e: Exception) {
+            android.util.Log.e("ApiRepository", "Error updating patient profile", e)
             NetworkResult.Error(e.message ?: "Network error")
         }
     }
@@ -455,11 +459,51 @@ class ApiRepository(private val context: Context? = null) {
             if (response.isSuccessful && response.body() != null) {
                 NetworkResult.Success(response.body()!!)
             } else {
+                // Parse error response
                 val errorBody = response.errorBody()?.string()
-                NetworkResult.Error(errorBody ?: "Failed to create profile", response.code())
+                val errorMessage = parseErrorMessage(errorBody, response.code(), "create profile")
+                NetworkResult.Error(errorMessage, response.code())
             }
         } catch (e: Exception) {
+            android.util.Log.e("ApiRepository", "Error creating patient profile", e)
             NetworkResult.Error(e.message ?: "Network error")
+        }
+    }
+    
+    private fun parseErrorMessage(errorBody: String?, statusCode: Int, operation: String): String {
+        if (errorBody == null) {
+            return "Failed to $operation (Status: $statusCode)"
+        }
+        
+        return try {
+            val jsonObject = org.json.JSONObject(errorBody)
+            val error = jsonObject.optString("error", "")
+            val details = jsonObject.optJSONArray("details")
+            
+            if (details != null && details.length() > 0) {
+                // Format validation errors
+                val detailMessages = (0 until details.length()).mapNotNull { i ->
+                    val detailObj = details.optJSONObject(i)
+                    if (detailObj != null) {
+                        val field = detailObj.optString("field", "")
+                        val message = detailObj.optString("message", "")
+                        if (field.isNotEmpty() && message.isNotEmpty()) {
+                            "$field: $message"
+                        } else null
+                    } else null
+                }.joinToString(", ")
+                
+                if (detailMessages.isNotEmpty()) {
+                    if (error.isNotEmpty()) "$error: $detailMessages" else detailMessages
+                } else {
+                    error.ifEmpty { errorBody }
+                }
+            } else {
+                jsonObject.optString("message", error).ifEmpty { errorBody }
+            }
+        } catch (e: Exception) {
+            // If JSON parsing fails, return the raw error body
+            errorBody
         }
     }
     

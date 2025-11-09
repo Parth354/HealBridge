@@ -11,9 +11,11 @@ A comprehensive healthcare platform connecting patients with doctors through int
 
 #### **Install → Launch**
 - Pick language → enable voice assist
-- OTP login via phone number
+- **OTP-based login** via phone number (Twilio SMS)
+- Enter phone number → Receive OTP → Verify OTP
 - Create patient profile (name, DOB, gender, allergies, chronic conditions, emergency contact)
 - Consent for data use and notifications
+- Profile stored in PostgreSQL (Prisma) - no Firebase required
 
 #### **Home (Triage + Discovery)**
 - Input symptoms by text/voice → AI triage suggests specialty and urgency bucket: **Immediate**, **Scheduled**, **House Visit**
@@ -154,20 +156,26 @@ notification(id, user_id, appointment_id, type, channel, scheduled_at, sent_at, 
 
 ## 🔌 APIs in Call Order (Happy Path)
 
-1. `POST /auth/otp` → `POST /auth/verify`
-2. `GET /triage?symptoms=...` → returns specialty, urgency bucket
-3. `GET /doctors?specialty=cardio&lat=..&lon=..&visit=clinic|house&sort=distance|next_available`
-4. `GET /doctors/{id}/availability?date=YYYY-MM-DD`
-5. `POST /slot_holds {doctor_id, clinic_id, start_ts}` → `{hold_id, expires_at}`
-6. `POST /appointments {hold_id, patient_id, visit_type, address?}`
-7. `POST /documents {file}` → `{doc_id}` → `POST /documents/{id}/ocr`
-8. `GET /patients/{id}/summary` → used for doctor preview and RAG grounding
-9. `POST /prescriptions {appointment_id, items[...]}` → returns pdf_url
-10. `POST /notifications {type='prescription_mail', to=email, link=pdf_url}`
-11. `POST /medication_reminders {medication_id, schedule[]}`
-12. `POST /checkin {appointment_id}`
-13. `POST /consult/{appointment_id}/start` → `/stop`
-14. `POST /appointments/{id}/reschedule` or `/cancel`
+### **Authentication Flow**
+1. `POST /api/auth/otp/send` → Send OTP to phone number
+2. `POST /api/auth/otp/verify` → Verify OTP and get JWT token
+3. `POST /api/auth/patient/profile` → Create patient profile (if first time)
+
+### **Booking Flow**
+4. `GET /api/patient/triage/analyze?symptoms=...` → returns specialty, urgency bucket
+5. `GET /api/patient/doctors/search?specialty=cardio&lat=..&lon=..&visit=clinic|house&sort=distance|next_available`
+6. `GET /api/patient/doctors/{id}/clinics/{clinicId}/availability?date=YYYY-MM-DD`
+7. `POST /api/patient/bookings/hold {doctor_id, clinic_id, start_ts}` → `{hold_id, expires_at}`
+8. `POST /api/patient/bookings/confirm {hold_id, visit_type, address?}` → Create appointment
+
+### **Post-Booking**
+9. `POST /api/patient/documents/upload {file}` → `{doc_id}` → OCR processing
+10. `GET /api/patient/summary` → used for doctor preview and RAG grounding
+11. `POST /api/doctor/prescriptions {appointment_id, items[...]}` → returns pdf_url
+12. `POST /api/notifications {type='prescription_mail', to=email, link=pdf_url}`
+13. `POST /api/patient/appointments/{id}/checkin` → Check-in at clinic
+14. `POST /api/doctor/appointments/{id}/start` → `/stop` → Consultation timing
+15. `POST /api/patient/appointments/{id}/reschedule` or `/cancel`
 
 ## ⚡ Events and Jobs (Queues)
 
@@ -181,10 +189,15 @@ notification(id, user_id, appointment_id, type, channel, scheduled_at, sent_at, 
 
 ## 🔒 Security and Access
 
+- **Authentication**: OTP-based (Twilio SMS) for patients and doctors
+- **Token Storage**: JWT tokens stored securely (EncryptedSharedPreferences on Android, localStorage on Web)
 - **RBAC**: patient sees own data; doctor sees assigned appointments; staff limited to clinic
+- **Database**: Single PostgreSQL database (no Firebase/Firestore)
 - All PHI at rest encrypted; audit logs on read/write
 - Idempotent APIs with request_id to avoid double bookings
 - PII minimization in logs; redact in traces
+- OTP expiration: 5 minutes (configurable)
+- JWT token expiration: 7 days (configurable)
 
 ## 📊 KPI Targets
 
@@ -216,7 +229,9 @@ notification(id, user_id, appointment_id, type, channel, scheduled_at, sent_at, 
 
 ### **Backend**
 - **Runtime**: Node.js + Express
-- **Database**: PostgreSQL + Prisma ORM
+- **Database**: PostgreSQL + Prisma ORM (Single source of truth)
+- **Authentication**: JWT tokens (OTP-based via Twilio)
+- **SMS Service**: Twilio (for OTP delivery)
 - **Cache**: Redis
 - **Queue**: Bull/BullMQ
 - **AI**: OpenAI GPT-4 + Embeddings
@@ -228,9 +243,10 @@ notification(id, user_id, appointment_id, type, channel, scheduled_at, sent_at, 
 - **UI Framework**: Material Design 3 + ViewBinding
 - **Architecture**: MVVM with AndroidViewModel
 - **Networking**: Retrofit + OkHttp
-- **Authentication**: Firebase Auth
-- **Database**: Firebase Firestore
-- **Notifications**: Firebase Cloud Messaging + WorkManager
+- **Authentication**: OTP-based (Twilio SMS) - No Firebase required
+- **Database**: PostgreSQL via Backend API (Prisma ORM)
+- **Token Storage**: EncryptedSharedPreferences (JWT tokens)
+- **Notifications**: WorkManager for local notifications
 - **Location**: Google Play Services Location
 - **Image Processing**: Glide
 - **Dependency Injection**: Manual (can be migrated to Hilt/Koin)
@@ -261,33 +277,61 @@ notification(id, user_id, appointment_id, type, channel, scheduled_at, sent_at, 
 cd backend
 npm install
 cp .env.example .env
-# Configure DATABASE_URL, REDIS_URL, etc.
-npx prisma migrate dev
+# Configure DATABASE_URL, REDIS_URL, TWILIO credentials, JWT_SECRET, etc.
+npm run prisma:generate
+npm run prisma:migrate
+# Or for quick dev: npm run prisma:db:push
 npm run dev
 ```
+
+**Required Environment Variables:**
+- `DATABASE_URL` - PostgreSQL connection string
+- `REDIS_URL` - Redis connection string
+- `JWT_SECRET` - Secret for JWT token signing
+- `TWILIO_ACCOUNT_SID` - Twilio account SID
+- `TWILIO_AUTH_TOKEN` - Twilio auth token
+- `TWILIO_PHONE_NUMBER` - Twilio phone number for SMS
+- `PORT` - Server port (default: 3000)
 
 ### **Patient Mobile App Setup (Android)**
 ```bash
 cd apps/HealBridge
 # Open in Android Studio
 # Sync Gradle files
+# Configure API_BASE_URL in ApiClient.kt
 # Run on emulator or device
 ```
+
+**Configuration:**
+- Update `BASE_URL` in `apps/HealBridge/app/src/main/java/com/example/healbridge/api/ApiClient.kt`
+- Default: `https://healbridgebackend.onrender.com/`
+- For local testing: `http://10.0.2.2:3000/` (Android emulator)
+- For physical device: `http://YOUR_LOCAL_IP:3000/`
+
+**Authentication Flow:**
+1. User enters phone number
+2. App calls `POST /api/auth/otp/send` → Twilio sends OTP via SMS
+3. User enters OTP
+4. App calls `POST /api/auth/otp/verify` → Backend returns JWT token
+5. App stores JWT token in EncryptedSharedPreferences
+6. All subsequent API calls include JWT token in `Authorization` header
 
 **Prerequisites:**
 - Android Studio Hedgehog or later
 - JDK 17+
 - Android SDK 24+ (minSdk), 35 (targetSdk)
-- Firebase project with `google-services.json` in `app/` directory
+- Backend API running (for OTP authentication)
 
 **Key Features Implemented:**
-- ✅ Firebase Authentication (Email/Google)
+- ✅ OTP-based Authentication (Phone number + Twilio SMS)
+- ✅ Patient profile management (stored in PostgreSQL)
 - ✅ Appointment booking with slot holds
 - ✅ Medical records management with OCR
 - ✅ Patient summary chatbot with RAG
 - ✅ Doctor search with map view
 - ✅ Appointment reminders with directions (1 hour prior)
 - ✅ Modern Material Design 3 UI
+- ✅ Secure JWT token storage
 
 ### **Doctor Web App Setup**
 ```bash
@@ -307,8 +351,10 @@ npm run dev
 ## ✅ Current Implementation Status
 
 ### **Patient App (Android) - Completed Features**
-- ✅ Firebase Authentication (Email/Google Sign-in)
-- ✅ User profile creation and management
+- ✅ OTP-based Authentication (Phone number + Twilio SMS)
+- ✅ Secure JWT token storage (EncryptedSharedPreferences)
+- ✅ Patient profile creation and management (PostgreSQL via API)
+- ✅ Profile fields: name, DOB, gender, allergies, chronic conditions, emergency contact
 - ✅ Doctor search with filters (specialty, distance, rating)
 - ✅ Interactive map view with doctor locations
 - ✅ Appointment booking flow (slot hold → confirmation)
@@ -316,9 +362,10 @@ npm run dev
 - ✅ Patient summary chatbot with RAG (Retrieval-Augmented Generation)
 - ✅ Appointment viewing (upcoming/past with tabs)
 - ✅ Appointment reminders with directions (1 hour prior notification)
-- ✅ Modern Material Design 3 UI
+- ✅ Modern Material Design 3 UI with decorative elements
 - ✅ Home screen with quick actions
 - ✅ Emergency call functionality
+- ✅ No Firebase dependency - direct API communication
 
 ### **Doctor App (Web) - Completed Features**
 - ✅ Doctor authentication and profile setup
@@ -330,15 +377,18 @@ npm run dev
 
 ### **Backend - Completed Features**
 - ✅ RESTful API with Express.js
-- ✅ Firebase authentication integration
-- ✅ Prisma ORM with PostgreSQL
+- ✅ OTP-based authentication (Twilio SMS for patients and doctors)
+- ✅ JWT token generation and validation
+- ✅ Prisma ORM with PostgreSQL (single source of truth)
+- ✅ Patient profile management (allergies, chronic conditions, emergency contact)
 - ✅ Doctor search with geolocation
 - ✅ Slot availability calculation
 - ✅ Appointment booking with conflict prevention
 - ✅ Schedule block management (CRUD)
-- ✅ Notification service (email, push)
+- ✅ Notification service (email, SMS, push)
 - ✅ OCR service integration
 - ✅ RAG service for patient summaries
+- ✅ No Firebase/Firestore dependency
 
 ## 🎯 Roadmap
 

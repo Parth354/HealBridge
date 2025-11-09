@@ -151,12 +151,29 @@ class AuthService {
   async createPatientProfile(userId, profileData) {
     const { name, dob, gender, allergies, chronicConditions, emergencyContact } = profileData;
 
+    // Normalize gender: "Prefer not to say" -> "Other"
+    const normalizedGender = gender === 'Prefer not to say' ? 'Other' : gender;
+
+    // Parse date - handle both Date objects and YYYY-MM-DD strings
+    let parsedDob;
+    if (dob instanceof Date) {
+      parsedDob = dob;
+    } else if (typeof dob === 'string') {
+      // Parse YYYY-MM-DD format
+      parsedDob = new Date(dob + 'T00:00:00.000Z');
+      if (isNaN(parsedDob.getTime())) {
+        throw new Error('Invalid date format. Expected YYYY-MM-DD');
+      }
+    } else {
+      throw new Error('Invalid date format');
+    }
+
     const patient = await prisma.patient.create({
       data: {
         user_id: userId,
         name,
-        dob: new Date(dob),
-        gender,
+        dob: parsedDob,
+        gender: normalizedGender,
         allergies: allergies || '',
         chronicConditions: chronicConditions || '',
         emergencyContact
